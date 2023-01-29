@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ADSB.lol - Open Source ADSB Aggregation</title>
+    <style>
+        /* Set the overall container to fit in top 10% of the screen */
+        #container {
+            height: 40%;
+            width: 100%;
+            text-align: center;
+        }
+
+        #globe-iframe {
+            height: 100%;
+            width: 90%;
+            align-self: center;
+            align-items: center;
+            display: block;
+            margin: 0 auto;
+            margin-top: 10em;
+        }
+
+        body {
+            font-family: sans-serif;
+            size: 1em;
+            background-color: #3a3a3a;
+            color: #ffffff;
+            height: 100vh;
+        }
+
+        li {
+            list-style-type: none;
+        }
+
+        a {
+            color: #bbffff;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <h1>ADSB.lol is an <a href="https://github.com/adsblol/infra">Open Source</a> ADSB aggregator.
+        </h1>
+        <h2>
+            <a href="https://globe.adsb.lol/?zoom=10&lat=40.76978444757558&lon=-73.84745676862057">Globe (Map)</a>
+        </h2>
+        <h3>
+            <a href="https://matrix.to/#/#adsblol:gatto.club">Matrix</a> /
+            <a href="https://grafana.adsb.lol/public-dashboards/f57efa5e8e0648aea296dbac998e14fe?orgId=1">Stats</a>
+
+        </h3>
+        <h2>Feed Information (<b>{{len}}</b> people feeding)</h2>
+        <ul>
+            <li>BEAST: <code>feed.adsb.lol</code> port <code>1337</code> or <code>30004</code>,
+                <code>30005</code>
+            </li>
+            <li>MLAT: <code>feed.adsb.lol</code> port <code>1338</code> or port <code>31090</code>
+            <li>
+                <p>For <a href="https://github.com/adsblol/feed">detailed feeding instructions, click here</a></p>
+        </ul>
+
+        
+        {% if not clients %}
+        <h2 style="color: red">You are not feeding. :-(</h2>
+        {% else %}
+        <h2>Feeding from the following clients:</h2>
+        <!--- Make a table, columns: HEX, IP, KBPS, CONN_TIME, MSG_S, POSITION_S, REDUCE_SIGNAL, POSITIONS -->
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>IP</th>
+                <th>Kbps</th>
+                <th>Time</th>
+                <th>Total Positions</th>
+            </tr>
+            {% for client in clients %}
+            <tr>
+                <td>{{ client[0] }}</td>
+                <td>{{ client[1] }}</td>
+                <td>{{ client[2] }}</td>
+                <td>{{ client[3] }}</td>
+                <td>{{ client[7] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
+    </div>
+</body>
+
+</html>
