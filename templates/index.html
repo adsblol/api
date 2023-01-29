@@ -2,12 +2,13 @@
 <html>
 
 <head>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
     <title>ADSB.lol - Open Source ADSB Aggregation</title>
     <style>
         /* Set the overall container to fit in top 10% of the screen */
         #container {
-            height: 40%;
-            width: 100%;
+            width: 100vw;
             text-align: center;
         }
 
@@ -41,6 +42,17 @@
             margin: 0 auto;
             padding-top: 1em;
         }
+        table {
+            margin: 0 auto;
+            width: 60%;
+            border: 1px solid #ffffff;
+            border-collapse: collapse;
+        }
+        .map {
+            width: 50%;
+            margin: 0 auto;
+            height: 50%;
+        }
     </style>
 </head>
 
@@ -61,7 +73,7 @@
             <a href="https://grafana.adsb.lol/public-dashboards/f57efa5e8e0648aea296dbac998e14fe?orgId=1">Stats</a>
 
         </h3>
-        <h2>Feed Information (<b>{{len}}</b> people feeding)</h2>
+        <h2>Feed Information (<b>{{len}}</b> people feeding{% if clients %}, but you're my favourite.{%endif%})</h2>
         <ul>
             <li>BEAST: <code>feed.adsb.lol</code> port <code>1337</code> or <code>30004</code>,
                 <code>30005</code>
@@ -96,8 +108,29 @@
             {% endfor %}
         </table>
         {% endif %}
-
+        <h2>Feeders</h2>
     </div>
+    <div class="map" id="map"></div>
+
 </body>
 
+<script>
+    // Global map
+    const map = L.map('map').setView([0, -1], 1);
+
+    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+    // Fetch /receivers and add markers
+    // Format: [ [ -1, -2 ], [ -3, -4 ]
+    fetch('/receivers')
+        .then(response => response.json())
+        .then(data => {
+            data.forEach(receiver => {
+                L.marker([receiver[0], receiver[1]]).addTo(map);
+            });
+        });
+        
+    </script>
 </html>

@@ -1,3 +1,4 @@
+import os
 import asyncio
 import aiohttp
 import aiohttp_jinja2
@@ -5,24 +6,35 @@ import jinja2
 from aiohttp import web
 routes = web.RouteTableDef()
 
+
 async def fetch_remote_data(app):
     try:
         while True:
             async with aiohttp.ClientSession() as session:
+                # clients update
                 ips = ["ingest-readsb:150"]
                 for ip in ips:
                     clients = []
+                    receivers = []
                     async with session.get(f"http://{ip}/clients.json") as resp:
                         data = await resp.json()
                         clients += data["clients"]
                         print(len(clients), "clients")
-                    app["clients"] = dict_to_set(clients)
             
+                    async with session.get(f"http://{ip}/receivers.json") as resp:
+                        data = await resp.json()
+                        for receiver in data["receivers"]:
+                            lat, lon = round(receiver[8], 2), round(receiver[9], 2)                        
+                            receivers.append([lat, lon])
+                        print(len(receivers), "receivers")
+                app["clients"] = clients_dict_to_set(clients)
+                app["receivers"] = receivers
+                
             await asyncio.sleep(1)
     except asyncio.CancelledError:
         print("Background task cancelled")
 
-def dict_to_set(clients):
+def clients_dict_to_set(clients):
     clients_set = set()
     for client in clients:
         hex = client[0]
@@ -41,8 +53,6 @@ def get_clients_per_ip(clients, ip: str) -> list:
     
 @routes.get("/")
 async def index(request):
-    # print headers
-    print(request.headers)
     clients = get_clients_per_ip(request.app["clients"], request.headers["X-Original-Forwarded-For"])
     context = {"clients": clients, "ip": request.headers["X-Original-Forwarded-For"], "len": len(request.app["clients"])}
     response = aiohttp_jinja2.render_template(
@@ -52,7 +62,10 @@ async def index(request):
 
     # Return a template index.html with the clients, pass the clients to the template which is a index.html file
 
-
+@routes.get("/receivers")
+async def receivers(request):
+    receivers = request.app["receivers"]
+    return web.json_response(receivers)
 
 async def background_tasks(app):
     app["fetch_remote_data"] = asyncio.create_task(fetch_remote_data(app))
@@ -67,6 +80,7 @@ async def background_tasks(app):
 app = web.Application()
 app.add_routes(routes)
 app["clients"] = set()
+app["receivers"] = []
 
 # add background task
 app.cleanup_ctx.append(background_tasks)
