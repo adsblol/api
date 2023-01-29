@@ -6,18 +6,21 @@ from aiohttp import web
 routes = web.RouteTableDef()
 
 async def fetch_remote_data(app):
-    while True:
-        async with aiohttp.ClientSession() as session:
-            ips = ["ingest-readsb:150"]
-            for ip in ips:
-                clients = []
-                async with session.get(f"http://{ip}/clients.json") as resp:
-                    data = await resp.json()
-                    clients += data["clients"]
-                    print(len(clients), "clients")
-                app["clients"] = dict_to_set(clients)
-        
-        await asyncio.sleep(1)
+    try:
+        while True:
+            async with aiohttp.ClientSession() as session:
+                ips = ["ingest-readsb:150"]
+                for ip in ips:
+                    clients = []
+                    async with session.get(f"http://{ip}/clients.json") as resp:
+                        data = await resp.json()
+                        clients += data["clients"]
+                        print(len(clients), "clients")
+                    app["clients"] = dict_to_set(clients)
+            
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        print("Background task cancelled")
 
 def dict_to_set(clients):
     clients_set = set()
@@ -41,7 +44,7 @@ async def index(request):
     # print headers
     print(request.headers)
     clients = get_clients_per_ip(request.app["clients"], request.headers["X-Original-Forwarded-For"])
-    context = {"clients": clients, "ip": request.headers["X-Original-Forwarded-For"]}
+    context = {"clients": clients, "ip": request.headers["X-Original-Forwarded-For"], "len": len(request.app["clients"])}
     response = aiohttp_jinja2.render_template(
         'index.html', request, context
     )
