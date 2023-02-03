@@ -43,14 +43,9 @@ async def fetch_remote_data(app):
                     data = await resp.json()
                     print(data)
             print("Fetched mlat data")
-            # data is a dict {name: {}}
-            # we want to turn the name in a one way hash
-            # and then add the dict to the mlat_sync_json
-            # we keep only the first 2 letters of the hash, then we make a sanitised bcrypt for the rest
-            # we do this to keep the hash short, and to make it harder to reverse
-            # make the bcrypt deterministic by using the same salt
             temporary_dict = {}
             for name, value in data.items():
+                print("Processing", name, "...")
                 salt = gen_salt("adsblol" + name[0:4])
                 hash = bcrypt.hashpw(name.encode(), salt).decode()
                 temporary_dict[hash[0:2] + "_" + hash[16:24]] = value
