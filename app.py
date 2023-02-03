@@ -125,6 +125,8 @@ app.add_routes(routes)
 app["clients"] = set()
 app["receivers"] = []
 app["mlat_sync_json"] = {}
+app["mlat_totalcount"] = {}
+
 # add background task
 app.cleanup_ctx.append(background_tasks)
 
