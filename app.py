@@ -53,12 +53,12 @@ async def fetch_remote_data(app):
                 for peer_name, _ in value["peers"].items():
                     temporary_peers[cachehash(app, peer_name)] = value
 
-                temporary_dict[hashed_name] = [
+                temporary_dict[hashed_name] = {
                     value["lat"],
                     value["lon"],
                     value["bad_syncs"],
                     temporary_peers,
-                ]
+                }
 
             app["mlat_sync_json"] = temporary_dict
             app["mlat_totalcount_json"] = {
