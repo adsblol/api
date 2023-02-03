@@ -91,7 +91,7 @@ def cachehash(app, name):
     if name not in app["mlat_cached_names"]:
         print("Hashing...")
         hash = bcrypt.hashpw(name.encode(), salt).decode()
-        app["mlat_cached_names"][name] = name[0:2] + "_" + hash[16:28]
+        app["mlat_cached_names"][name] = name[0:2] + "_" + hash[-12:]
     return app["mlat_cached_names"][name]
 
 
