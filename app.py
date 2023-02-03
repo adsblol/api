@@ -12,54 +12,55 @@ routes = web.RouteTableDef()
 
 async def fetch_remote_data(app):
     try:
+        session = aiohttp.ClientSession(timeout=1)
         while True:
-            async with aiohttp.ClientSession(
-                read_timeout=1.0, conn_timeout=1.0
-            ) as session:
-                # clients update
-                ips = ["ingest-readsb:150"]
-                for ip in ips:
-                    clients = []
-                    receivers = []
-                    async with session.get(f"http://{ip}/clients.json") as resp:
-                        data = await resp.json()
-                        clients += data["clients"]
-                        print(len(clients), "clients")
-
-                    async with session.get(f"http://{ip}/receivers.json") as resp:
-                        data = await resp.json()
-                        for receiver in data["receivers"]:
-                            lat, lon = round(receiver[8], 2), round(receiver[9], 2)
-                            receivers.append([lat, lon])
-                        print(len(receivers), "receivers")
-                app["clients"] = clients_dict_to_set(clients)
-                app["receivers"] = receivers
-
-                # mlat update
-                async with session.get("http://mlat-mlat-server:150/sync.json") as resp:
+            # clients update
+            ips = ["ingest-readsb:150"]
+            print("Fetching data from", ips)
+            for ip in ips:
+                clients = []
+                receivers = []
+                async with session.get(f"http://{ip}/clients.json") as resp:
                     data = await resp.json()
-                    # data is a dict {name: {}}
-                    # we want to turn the name in a one way hash
-                    # and then add the dict to the mlat_sync_json
-                    # we keep only the first 2 letters of the hash, then we make a sanitised bcrypt for the rest
-                    # we do this to keep the hash short, and to make it harder to reverse
-                    # make the bcrypt deterministic by using the same salt
-                    temporary_dict = {}
-                    for name, value in data.items():
-                        salt = "adsblol" + name[0:4]
-                        hash = bcrypt.hashpw(name.encode(), salt.encode())  # 60 chars
-                        hash = hash[0:12].decode()
-                        temporary_dict[name[0:2] + "_" + hash] = value
+                    clients += data["clients"]
+                    print(len(clients), "clients")
 
-                    app["mlat_sync_json"] = temporary_dict
-                    app["mlat_totalcount_json"] = {
-                        "0A": len(app["mlat_sync_json"]),
-                        "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
-                    }
-                # sync.json update
+                async with session.get(f"http://{ip}/receivers.json") as resp:
+                    data = await resp.json()
+                    for receiver in data["receivers"]:
+                        lat, lon = round(receiver[8], 2), round(receiver[9], 2)
+                        receivers.append([lat, lon])
+                    print(len(receivers), "receivers")
 
+            app["clients"] = clients_dict_to_set(clients)
+            app["receivers"] = receivers
+
+            # mlat update
+            print("Fetching mlat data")
+            async with session.get("http://mlat-mlat-server:150/sync.json") as resp:
+                data = await resp.json()
+                # data is a dict {name: {}}
+                # we want to turn the name in a one way hash
+                # and then add the dict to the mlat_sync_json
+                # we keep only the first 2 letters of the hash, then we make a sanitised bcrypt for the rest
+                # we do this to keep the hash short, and to make it harder to reverse
+                # make the bcrypt deterministic by using the same salt
+            temporary_dict = {}
+            for name, value in data.items():
+                salt = "adsblol" + name[0:4]
+                hash = bcrypt.hashpw(name.encode(), salt.encode())  # 60 chars
+                hash = hash[0:12].decode()
+                temporary_dict[name[0:2] + "_" + hash] = value
+
+            app["mlat_sync_json"] = temporary_dict
+            app["mlat_totalcount_json"] = {
+                "0A": len(app["mlat_sync_json"]),
+                "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
+            }
+            print("Looped..")
             await asyncio.sleep(1)
     except asyncio.CancelledError:
+        await session.close()
         print("Background task cancelled")
 
 
