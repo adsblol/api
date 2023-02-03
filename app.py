@@ -61,7 +61,7 @@ async def fetch_remote_data(app):
                         app["mlat_cached_names"][peer["name"]] = (
                             peer["name"][0:2] + "_" + hash[16:28]
                         )
-                    peer["name"] = app["mlat_cached_names"]["name"]
+                    peer["name"] = app["mlat_cached_names"][peer["name"]]
                 temporary_dict[app["mlat_cached_names"][name]] = value
 
             app["mlat_sync_json"] = temporary_dict
