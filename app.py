@@ -54,10 +54,10 @@ async def fetch_remote_data(app):
                     temporary_peers[cachehash(app, peer_name)] = value
 
                 temporary_dict[hashed_name] = {
-                    value["lat"],
-                    value["lon"],
-                    value["bad_syncs"],
-                    temporary_peers,
+                    "lat": value["lat"],
+                    "lon": value["lon"],
+                    "bad_syncs": value["bad_syncs"],
+                    "peers": temporary_peers,
                 }
 
             app["mlat_sync_json"] = temporary_dict
