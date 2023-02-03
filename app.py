@@ -13,7 +13,9 @@ routes = web.RouteTableDef()
 async def fetch_remote_data(app):
     try:
         while True:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(
+                read_timeout=1.0, conn_timeout=1.0
+            ) as session:
                 # clients update
                 ips = ["ingest-readsb:150"]
                 for ip in ips:
@@ -128,7 +130,7 @@ app.add_routes(routes)
 app["clients"] = set()
 app["receivers"] = []
 app["mlat_sync_json"] = {}
-app["mlat_totalcount"] = {}
+app["mlat_totalcount_json"] = {}
 
 # add background task
 app.cleanup_ctx.append(background_tasks)
