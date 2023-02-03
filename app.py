@@ -52,13 +52,13 @@ async def fetch_remote_data(app):
                 if name not in app["mlat_cached_names"]:
                     print("Hashing...")
                     hash = bcrypt.hashpw(name.encode(), salt).decode()
-                    app["mlat_cached_names"]["name"] = name[0:2] + "_" + hash[16:28]
+                    app["mlat_cached_names"][name] = name[0:2] + "_" + hash[16:28]
                 # Replace the peers in value
                 for peer in value["peers"]:
                     if peer["name"] not in app["mlat_cached_names"]:
                         print("Hashing...")
                         hash = bcrypt.hashpw(peer["name"].encode(), salt).decode()
-                        app["mlat_cached_names"]["name"] = (
+                        app["mlat_cached_names"][peer["name"]] = (
                             peer["name"][0:2] + "_" + hash[16:28]
                         )
                     peer["name"] = app["mlat_cached_names"]["name"]
