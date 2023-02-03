@@ -100,7 +100,7 @@ async def receivers(request):
     return web.json_response(request.app["receivers"])
 
 
-@routes.get("/api/0/mlat-serevr/0A/sync.json")
+@routes.get("/api/0/mlat-server/0A/sync.json")
 async def mlat_receivers(request):
     return web.json_response(request.app["mlat_sync_json"])
 
