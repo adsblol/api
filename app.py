@@ -46,12 +46,14 @@ async def fetch_remote_data(app):
                     print(data)
             print("Fetched mlat data")
             temporary_dict = {}
+            salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
             for name, value in data.items():
                 print("Processing", name, "...")
-                salt = gen_salt("adsblol" + name[0:4])
-                hash = bcrypt.hashpw(name.encode(), salt).decode()
-                temporary_dict[hash[0:2] + "_" + hash[16:24]] = value
-                print(hash[0:2] + "_" + hash[16:24])
+
+                if name not in app["mlat_cached_names"]:
+                    hash = bcrypt.hashpw(name.encode(), salt).decode()
+                    app["mlat_cached_names"]["name"] = name[0:2] + "_" + hash[16:28]
+                temporary_dict[app["mlat_cached_names"]["name"]] = value
 
             app["mlat_sync_json"] = temporary_dict
             app["mlat_totalcount_json"] = {
@@ -63,15 +65,6 @@ async def fetch_remote_data(app):
     except asyncio.CancelledError:
         await session.close()
         print("Background task cancelled")
-
-
-# https://stackoverflow.com/a/73840275
-def gen_salt(phrase: str, rounds: int = 2, prefix: bytes = b"2a") -> bytes:
-    # choose a random printable byte to use as pad character
-    pad_byte = secrets.choice(printable[:62]).encode()
-    padded_phrase = phrase.upper().encode().ljust(22, pad_byte)
-    cost = str(rounds).encode()
-    return b"$" + prefix + b"$" + cost + b"$" + padded_phrase
 
 
 def clients_dict_to_set(clients):
@@ -142,6 +135,7 @@ app["clients"] = set()
 app["receivers"] = []
 app["mlat_sync_json"] = {}
 app["mlat_totalcount_json"] = {}
+app["mlat_cached_names"] = {}
 
 # add background task
 app.cleanup_ctx.append(background_tasks)
