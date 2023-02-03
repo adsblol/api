@@ -49,8 +49,8 @@ async def fetch_remote_data(app):
 
             for name, value in data.items():
                 hashed_name = cachehash(app, name)
-                for peer_name, peer_value in value["peers"].items():
-                    peer_value["name"] = cachehash(app, peer_name)
+                for peer_name, _ in value["peers"].items():
+                    peer_name = cachehash(app, peer_name)
                 temporary_dict[hashed_name] = value
 
             app["mlat_sync_json"] = temporary_dict
