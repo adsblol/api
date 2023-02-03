@@ -12,6 +12,7 @@ routes = web.RouteTableDef()
 
 async def fetch_remote_data(app):
     try:
+        timeout = aiohttp.ClientTimeout(total=1)
         while True:
             # clients update
             ips = ["ingest-readsb:150"]
@@ -19,12 +20,12 @@ async def fetch_remote_data(app):
             for ip in ips:
                 clients = []
                 receivers = []
-                async with aiohttp.ClientSession(timeout=1) as session:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"http://{ip}/clients.json") as resp:
                         data = await resp.json()
                         clients += data["clients"]
                         print(len(clients), "clients")
-                async with aiohttp.ClientSession(timeout=1) as session:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"http://{ip}/receivers.json") as resp:
                         data = await resp.json()
                         for receiver in data["receivers"]:
@@ -37,7 +38,7 @@ async def fetch_remote_data(app):
 
             # mlat update
             print("Fetching mlat data")
-            async with aiohttp.ClientSession(timeout=1) as session:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get("http://mlat-mlat-server:150/sync.json") as resp:
                     data = await resp.json()
                 # data is a dict {name: {}}
