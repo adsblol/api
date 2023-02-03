@@ -35,7 +35,7 @@ async def fetch_remote_data(app):
                 addrs = ["mlat-mlat-server:150"]
                 mlat_clients = []
                 for addr in addrs:
-                    async with session.get(f"http://{addr}/mlat-clients.json") as resp:
+                    async with session.get(f"http://{addr}/clients.json") as resp:
                         data = await resp.json()
                         mlat_clients.extend(data.values())
 
