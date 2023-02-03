@@ -41,6 +41,7 @@ async def fetch_remote_data(app):
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get("http://mlat-mlat-server:150/sync.json") as resp:
                     data = await resp.json()
+                    print(data)
             print("Fetched mlat data")
             # data is a dict {name: {}}
             # we want to turn the name in a one way hash
