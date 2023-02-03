@@ -46,23 +46,12 @@ async def fetch_remote_data(app):
                     print(data)
             print("Fetched mlat data")
             temporary_dict = {}
-            salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
-            for name, value in data.items():
 
-                if name not in app["mlat_cached_names"]:
-                    print("Hashing...")
-                    hash = bcrypt.hashpw(name.encode(), salt).decode()
-                    app["mlat_cached_names"][name] = name[0:2] + "_" + hash[16:28]
-                # Replace the peers in value
-                for peer in value["peers"]:
-                    if peer["name"] not in app["mlat_cached_names"]:
-                        print("Hashing...")
-                        hash = bcrypt.hashpw(peer["name"].encode(), salt).decode()
-                        app["mlat_cached_names"][peer["name"]] = (
-                            peer["name"][0:2] + "_" + hash[16:28]
-                        )
-                    peer["name"] = app["mlat_cached_names"][peer["name"]]
-                temporary_dict[app["mlat_cached_names"][name]] = value
+            for name, value in data.items():
+                hashed_name = cachehash(app, name)
+                for peer_name, peer_value in value["peers"].items():
+                    peer_value["name"] = cachehash(app, peer_name)
+                temporary_dict[hashed_name] = value
 
             app["mlat_sync_json"] = temporary_dict
             app["mlat_totalcount_json"] = {
@@ -95,6 +84,15 @@ def clients_dict_to_set(clients):
 
 def get_clients_per_ip(clients, ip: str) -> list:
     return [client for client in clients if client[1] == ip]
+
+
+def cachehash(app, name):
+    salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
+    if name not in app["mlat_cached_names"]:
+        print("Hashing...")
+        hash = bcrypt.hashpw(name.encode(), salt).decode()
+        app["mlat_cached_names"][name] = name[0:2] + "_" + hash[16:28]
+    return app["mlat_cached_names"][name]
 
 
 @routes.get("/")
