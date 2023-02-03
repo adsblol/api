@@ -42,12 +42,15 @@ async def fetch_remote_data(app):
                     # we keep only the first 2 letters of the hash, then we make a sanitised bcrypt for the rest
                     # we do this to keep the hash short, and to make it harder to reverse
                     # make the bcrypt deterministic by using the same salt
+                    temporary_dict = {}
                     for name, value in data.items():
                         salt = "adsblol" + name[0:4]
                         hash = bcrypt.hashpw(name.encode(), salt.encode())  # 60 chars
                         hash = hash[0:12].decode()
-                        app["mlat_sync_json"][name[0:2] + "_" + hash] = value
-                    app["mlat_totalcount"] = {
+                        temporary_dict[name[0:2] + "_" + hash] = value
+
+                    app["mlat_sync_json"] = temporary_dict
+                    app["mlat_totalcount_json"] = {
                         "0A": len(app["mlat_sync_json"]),
                         "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
                     }
@@ -106,8 +109,8 @@ async def mlat_receivers(request):
 
 
 @routes.get("/api/0/mlat-server/totalcount.json")
-async def mlat_totalcount(request):
-    return web.json_response(app["mlat_totalcount"])
+async def mlat_totalcount_json(request):
+    return web.json_response(app["mlat_totalcount_json"])
 
 
 async def background_tasks(app):
