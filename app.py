@@ -12,7 +12,6 @@ routes = web.RouteTableDef()
 
 async def fetch_remote_data(app):
     try:
-        session = aiohttp.ClientSession(timeout=1)
         while True:
             # clients update
             ips = ["ingest-readsb:150"]
@@ -20,25 +19,27 @@ async def fetch_remote_data(app):
             for ip in ips:
                 clients = []
                 receivers = []
-                async with session.get(f"http://{ip}/clients.json") as resp:
-                    data = await resp.json()
-                    clients += data["clients"]
-                    print(len(clients), "clients")
-
-                async with session.get(f"http://{ip}/receivers.json") as resp:
-                    data = await resp.json()
-                    for receiver in data["receivers"]:
-                        lat, lon = round(receiver[8], 2), round(receiver[9], 2)
-                        receivers.append([lat, lon])
-                    print(len(receivers), "receivers")
+                async with aiohttp.ClientSession(timeout=1) as session:
+                    async with session.get(f"http://{ip}/clients.json") as resp:
+                        data = await resp.json()
+                        clients += data["clients"]
+                        print(len(clients), "clients")
+                async with aiohttp.ClientSession(timeout=1) as session:
+                    async with session.get(f"http://{ip}/receivers.json") as resp:
+                        data = await resp.json()
+                        for receiver in data["receivers"]:
+                            lat, lon = round(receiver[8], 2), round(receiver[9], 2)
+                            receivers.append([lat, lon])
+                print(len(receivers), "receivers")
 
             app["clients"] = clients_dict_to_set(clients)
             app["receivers"] = receivers
 
             # mlat update
             print("Fetching mlat data")
-            async with session.get("http://mlat-mlat-server:150/sync.json") as resp:
-                data = await resp.json()
+            async with aiohttp.ClientSession(timeout=1) as session:
+                async with session.get("http://mlat-mlat-server:150/sync.json") as resp:
+                    data = await resp.json()
                 # data is a dict {name: {}}
                 # we want to turn the name in a one way hash
                 # and then add the dict to the mlat_sync_json
