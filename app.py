@@ -49,10 +49,9 @@ async def fetch_remote_data(app):
                 # make the bcrypt deterministic by using the same salt
             temporary_dict = {}
             for name, value in data.items():
-                salt = "adsblol" + name[0:4]
-                hash = bcrypt.hashpw(name.encode(), salt.encode())  # 60 chars
-                hash = hash[0:12].decode()
-                temporary_dict[name[0:2] + "_" + hash] = value
+                salt = gen_salt("adsblol" + name[0:4])
+                hash = bcrypt.hashpw(name.encode(), salt).decode()
+                temporary_dict[hash[0:2] + "_" + hash[16:24]] = value
 
             app["mlat_sync_json"] = temporary_dict
             app["mlat_totalcount_json"] = {
@@ -64,6 +63,15 @@ async def fetch_remote_data(app):
     except asyncio.CancelledError:
         await session.close()
         print("Background task cancelled")
+
+
+# https://stackoverflow.com/a/73840275
+def gen_salt(phrase: str, rounds: int = 2, prefix: bytes = b"2a") -> bytes:
+    # choose a random printable byte to use as pad character
+    pad_byte = secrets.choice(printable[:62]).encode()
+    padded_phrase = phrase.upper().encode().ljust(22, pad_byte)
+    cost = str(rounds).encode()
+    return b"$" + prefix + b"$" + cost + b"$" + padded_phrase
 
 
 def clients_dict_to_set(clients):
