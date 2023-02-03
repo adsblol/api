@@ -1,4 +1,5 @@
 import os
+from string import printable
 import asyncio
 import aiohttp
 import aiohttp_jinja2
