@@ -175,7 +175,8 @@
                 <th>Kbps</th>
                 <th>Time</th>
                 <th>Total Positions</th>
-                <th>Avg. Kbps</th>
+                <th>Messages/s</th>
+                <th>Positions/s</th>
                 {% for client in clients %}
             <tr>
                 <td>{{ client[0] }}</td>
@@ -183,13 +184,14 @@
                 <td>{{ client[2] }}</td>
                 <td>{{ client[3] }}</td>
                 <td>{{ client[7] }}</td>
+                <td>{{ client[4] }}</td>
                 <td>{{ client[5] }}</td>
             </tr>
             {% endfor %}
         </table>
         {% endif %}
         <h3>{{len}} ADSB Feeders (all locations are approximate, and can be off by 50+ km)</h3>
-    <h3>For a more accurate map of feeders, see the <a href="https://map.adsb.lol">MLAT map</a></h3>
+        <h3>For a more accurate map of feeders, see the <a href="https://map.adsb.lol">MLAT map</a></h3>
     </div>
     <div class="map" id="map"></div>
 
