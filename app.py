@@ -107,7 +107,9 @@ def cachehash(app, name):
         )
         if len(candidate) < 15:
             candidate += "".join(
-                random.choices(ascii_letters + digits, k=15 - len(candidate))
+                random.choices(
+                    ascii_letters + digits + ["-", "_"], k=15 - len(candidate)
+                )
             )
         app["mlat_cached_names"][name] = candidate
     return app["mlat_cached_names"][name]
