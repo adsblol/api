@@ -8,13 +8,14 @@ from aiohttp import web
 import bcrypt
 import secrets
 from datetime import datetime
+import humanize
 
 routes = web.RouteTableDef()
 
 
 async def fetch_remote_data(app):
     try:
-        timeout = aiohttp.ClientTimeout(total=1)
+        timeout = aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0)
         while True:
             # clients update
             ips = ["ingest-readsb:150"]
@@ -22,11 +23,15 @@ async def fetch_remote_data(app):
             for ip in ips:
                 clients = []
                 receivers = []
-                async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with aiohttp.ClientSession(
+                    timeout=timeout,
+                ) as session:
                     async with session.get(f"http://{ip}/clients.json") as resp:
                         data = await resp.json()
                         clients += data["clients"]
                         print(len(clients), "clients")
+                # This sometimes timeouts anyway
+
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"http://{ip}/receivers.json") as resp:
                         data = await resp.json()
@@ -78,11 +83,14 @@ def clients_dict_to_set(clients):
         hex = client[0]
         ip = client[1].split()[1]
         kbps = client[2]
-        conn_time = client[3]
+        conn_time = humanize.naturaldelta(
+            seconds=client[3],
+        )
         msg_s = client[4]
         position_s = client[5]
         reduce_signal = client[6]
         positions = client[8]
+
         clients_set.add(
             (hex, ip, kbps, conn_time, msg_s, position_s, reduce_signal, positions)
         )
