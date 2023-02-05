@@ -155,15 +155,21 @@ app["mlat_sync_json"] = {}
 app["mlat_totalcount_json"] = {}
 app["mlat_cached_names"] = {}
 
+
+async def aiohttp_session_setup(app):
+    timeout = aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0)
+    app["session"] = aiohttp.ClientSession(timeout=timeout)
+
+
+async def aiohttp_session_cleanup(app):
+    await app["session"].close()
+    asyncio.sleep(0)
+
+
 # add background task
 app.cleanup_ctx.append(background_tasks)
 app.on_startup.append(aiohttp_session_setup)
 app.on_cleanup.append(aiohttp_session_cleanup)
-
-
-def aiohttp_session_setup(app):
-    timeout = aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0)
-    app["session"] = aiohttp.ClientSession(timeout=timeout)
 
 
 if __name__ == "__main__":
