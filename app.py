@@ -8,7 +8,6 @@ from aiohttp import web
 import bcrypt
 import secrets
 from datetime import datetime
-import humanize
 
 routes = web.RouteTableDef()
 
