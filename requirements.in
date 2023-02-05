@@ -4,3 +4,4 @@ aiohttp_jinja2
 bcrypt
 pyopenssl
 secrets
+humanize

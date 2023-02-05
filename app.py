@@ -50,22 +50,7 @@ async def fetch_remote_data(app):
                     data = await resp.json()
                     print(data)
             print("Fetched mlat data")
-            temporary_dict = {}
-
-            for name, value in data.items():
-                temporary_peers = {}
-                hashed_name = cachehash(app, name)
-                for peer_name, _ in value["peers"].items():
-                    temporary_peers[cachehash(app, peer_name)] = value
-
-                temporary_dict[hashed_name] = {
-                    "lat": value["lat"],
-                    "lon": value["lon"],
-                    "bad_syncs": value["bad_syncs"],
-                    "peers": temporary_peers,
-                }
-
-            app["mlat_sync_json"] = temporary_dict
+            app["mlat_sync_json"] = anonymize_mlat_data(app, data)
             app["mlat_totalcount_json"] = {
                 "0A": len(app["mlat_sync_json"]),
                 "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
@@ -95,6 +80,25 @@ def clients_dict_to_set(clients):
             (hex, ip, kbps, conn_time, msg_s, position_s, reduce_signal, positions)
         )
     return clients_set
+
+
+def anonymize_mlat_data(app, data):
+    sanitized_data = {}
+    for name, value in data.items():
+        sanitized_peers = {}
+        # Sanitise both .["peers"] and .["peers"]["peers"]
+        for peer_name, peer_value in value["peers"].items():
+            for peer_peer_name, peer_peer_value in peer_value["peers"].items():
+                sanitized_peers[cachehash(app, peer_name)]["peers"][
+                    cachehash(app, peer_peer_name)
+                ] = peer_peer_value
+        sanitized_data[cachehash(app, name)] = {
+            "lat": value["lat"],
+            "lon": value["lon"],
+            "bad_syncs": value["bad_syncs"],
+            "peers": sanitized_peers,
+        }
+    return sanitized_data
 
 
 def get_clients_per_ip(clients, ip: str) -> list:
