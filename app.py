@@ -9,6 +9,7 @@ from aiohttp import web
 import bcrypt
 import secrets
 from datetime import datetime
+import uuid
 
 routes = web.RouteTableDef()
 
@@ -144,6 +145,11 @@ async def mlat_receivers(request):
 @routes.get("/api/0/mlat-server/totalcount.json")
 async def mlat_totalcount_json(request):
     return web.json_response(app["mlat_totalcount_json"])
+
+
+@routes.get("/api/0/uuid")
+async def uuid(request):
+    return web.text_response(str(uuid4()))
 
 
 async def background_tasks(app):
