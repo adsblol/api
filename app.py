@@ -101,12 +101,16 @@ def cachehash(app, name, extra_entropy=0):
         print("Hashing...")
         name = name + str(extra_entropy)
         hash = bcrypt.hashpw(name.encode(), salt).decode()
-        # Ensure the name has no special characters
-        name = "".join([c for c in name if c in ascii_letters + digits])
-        # If it's too short, add some random characters (should be 15)
-        if len(name) < 15:
-            name += random.choices(ascii_letters + digits, k=15 - len(name))
-        app["mlat_cached_names"][name] = name[0:2] + "_" + hash[-12:]
+        cnadidate = name[0:2] + "_" + hash[-12:]
+        # Ensure the candidate has no special characters, and is exactly 15 characters long
+        candidate = "".join(
+            [char for char in cnadidate if char in ascii_letters + digits]
+        )
+        if len(candidate) < 15:
+            candidate += "".join(
+                random.choices(ascii_letters + digits, k=15 - len(candidate))
+            )
+        app["mlat_cached_names"][name] = candidate
     return app["mlat_cached_names"][name]
 
 
