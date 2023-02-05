@@ -1,5 +1,5 @@
 import os
-from string import printable
+from string import ascii_letters, digits
 import asyncio
 import aiohttp
 import aiohttp_jinja2
@@ -94,11 +94,17 @@ def get_clients_per_ip(clients, ip: str) -> list:
     return [client for client in clients if client[1] == ip]
 
 
-def cachehash(app, name):
+def cachehash(app, name, extra_entropy=0):
     salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
     if name not in app["mlat_cached_names"]:
         print("Hashing...")
+        name = name + str(extra_entropy)
         hash = bcrypt.hashpw(name.encode(), salt).decode()
+        # Ensure the name has no special characters
+        name = "".join([c for c in name if c in ascii_letters + digits])
+        # If it's too short, add some random characters (should be 15)
+        if len(name) < 15:
+            name += secrets.token_hex(16)[0 : 15 - len(name)]
         app["mlat_cached_names"][name] = name[0:2] + "_" + hash[-12:]
     return app["mlat_cached_names"][name]
 
