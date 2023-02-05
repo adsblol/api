@@ -14,7 +14,6 @@ routes = web.RouteTableDef()
 
 async def fetch_remote_data(app):
     try:
-        timeout = aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0)
         while True:
             # clients update
             ips = ["ingest-readsb:150"]
@@ -22,32 +21,28 @@ async def fetch_remote_data(app):
             for ip in ips:
                 clients = []
                 receivers = []
-                async with aiohttp.ClientSession(
-                    timeout=timeout,
-                ) as session:
-                    async with session.get(f"http://{ip}/clients.json") as resp:
-                        data = await resp.json()
-                        clients += data["clients"]
-                        print(len(clients), "clients")
-                # This sometimes timeouts anyway
+                async with app["session"].get(f"http://{ip}/clients.json") as resp:
+                    data = await resp.json()
+                    clients += data["clients"]
+                    print(len(clients), "clients")
 
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(f"http://{ip}/receivers.json") as resp:
-                        data = await resp.json()
-                        for receiver in data["receivers"]:
-                            lat, lon = round(receiver[8], 2), round(receiver[9], 2)
-                            receivers.append([lat, lon])
-                print(len(receivers), "receivers")
+                async with app["session"].get(f"http://{ip}/receivers.json") as resp:
+                    data = await resp.json()
+                    for receiver in data["receivers"]:
+                        lat, lon = round(receiver[8], 2), round(receiver[9], 2)
+                        receivers.append([lat, lon])
+            print(len(receivers), "receivers")
 
             app["clients"] = clients_dict_to_set(clients)
             app["receivers"] = receivers
 
             # mlat update
             print("Fetching mlat data")
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get("http://mlat-mlat-server:150/sync.json") as resp:
-                    data = await resp.json()
-                    print(data)
+            async with app["session"].get(
+                "http://mlat-mlat-server:150/sync.json"
+            ) as resp:
+                data = await resp.json()
+                print(data)
             print("Fetched mlat data")
             app["mlat_sync_json"] = anonymize_mlat_data(app, data)
             app["mlat_totalcount_json"] = {
@@ -67,9 +62,7 @@ def clients_dict_to_set(clients):
         hex = client[0]
         ip = client[1].split()[1]
         kbps = client[2]
-        conn_time = humanize.naturaldelta(
-            seconds=client[3],
-        )
+        conn_time = client[3]
         msg_s = client[4]
         position_s = client[5]
         reduce_signal = client[6]
@@ -164,6 +157,14 @@ app["mlat_cached_names"] = {}
 
 # add background task
 app.cleanup_ctx.append(background_tasks)
+app.on_startup.append(aiohttp_session_setup)
+app.on_cleanup.append(aiohttp_session_cleanup)
+
+
+def aiohttp_session_setup(app):
+    timeout = aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0)
+    app["session"] = aiohttp.ClientSession(timeout=timeout)
+
 
 if __name__ == "__main__":
     aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader("/app/templates"))
