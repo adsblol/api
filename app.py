@@ -1,5 +1,6 @@
 import os
 from string import ascii_letters, digits
+import random
 import asyncio
 import aiohttp
 import aiohttp_jinja2
@@ -104,7 +105,7 @@ def cachehash(app, name, extra_entropy=0):
         name = "".join([c for c in name if c in ascii_letters + digits])
         # If it's too short, add some random characters (should be 15)
         if len(name) < 15:
-            name += secrets.token_hex(16)[0 : 15 - len(name)]
+            name += random.choices(ascii_letters + digits, k=15 - len(name))
         app["mlat_cached_names"][name] = name[0:2] + "_" + hash[-12:]
     return app["mlat_cached_names"][name]
 
