@@ -77,19 +77,16 @@ def clients_dict_to_set(clients):
 def anonymize_mlat_data(app, data):
     sanitized_data = {}
     for name, value in data.items():
-        sanitized_peers = {}
-        # Sanitise both .["peers"] and .["peers"]["peers"]
-        for peer_name, peer_value in value["peers"].items():
-            for peer_peer_name, peer_peer_value in peer_value["peers"].items():
-                sanitized_peers[cachehash(app, peer_name)]["peers"][
-                    cachehash(app, peer_peer_name)
-                ] = peer_peer_value
+        sanitised_peers = {}
+        for peer, peer_value in value["peers"].items():
+            sanitised_peers[cachehash(app, peer)] = peer_value
+
         sanitized_data[cachehash(app, name)] = {
             "lat": value["lat"],
             "lon": value["lon"],
-            "bad_syncs": value["bad_syncs"],
-            "peers": sanitized_peers,
+            "peers": sanitised_peers,
         }
+
     return sanitized_data
 
 
