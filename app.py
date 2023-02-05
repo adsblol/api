@@ -95,11 +95,10 @@ def get_clients_per_ip(clients, ip: str) -> list:
     return [client for client in clients if client[1] == ip]
 
 
-def cachehash(app, name, extra_entropy=0):
+def cachehash(app, name):
     salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
     if name not in app["mlat_cached_names"]:
         print("Hashing...")
-        name = name + str(extra_entropy)
         hash = bcrypt.hashpw(name.encode(), salt).decode()
         cnadidate = name[0:2] + "_" + hash[-12:]
         # Ensure the candidate has no special characters, and is exactly 15 characters long
