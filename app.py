@@ -10,6 +10,7 @@ import bcrypt
 import secrets
 from datetime import datetime
 import uuid
+import traceback
 
 routes = web.RouteTableDef()
 
@@ -17,44 +18,49 @@ routes = web.RouteTableDef()
 async def fetch_remote_data(app):
     try:
         while True:
-            # clients update
-            ips = ["ingest-readsb:150"]
-            print("Fetching data from", ips)
-            for ip in ips:
-                clients = []
-                receivers = []
-                async with app["session"].get(f"http://{ip}/clients.json") as resp:
+            try:
+                # clients update
+                ips = ["ingest-readsb:150"]
+                print("Fetching data from", ips)
+                for ip in ips:
+                    clients = []
+                    receivers = []
+                    async with app["session"].get(f"http://{ip}/clients.json") as resp:
+                        data = await resp.json()
+                        clients += data["clients"]
+                        print(len(clients), "clients")
+
+                    async with app["session"].get(
+                        f"http://{ip}/receivers.json"
+                    ) as resp:
+                        data = await resp.json()
+                        for receiver in data["receivers"]:
+                            lat, lon = round(receiver[8], 2), round(receiver[9], 2)
+                            receivers.append([lat, lon])
+                print(len(receivers), "receivers")
+
+                app["clients"] = clients_dict_to_set(clients)
+                app["receivers"] = receivers
+
+                # mlat update
+                print("Fetching mlat data")
+                async with app["session"].get(
+                    "http://mlat-mlat-server:150/sync.json"
+                ) as resp:
                     data = await resp.json()
-                    clients += data["clients"]
-                    print(len(clients), "clients")
-
-                async with app["session"].get(f"http://{ip}/receivers.json") as resp:
-                    data = await resp.json()
-                    for receiver in data["receivers"]:
-                        lat, lon = round(receiver[8], 2), round(receiver[9], 2)
-                        receivers.append([lat, lon])
-            print(len(receivers), "receivers")
-
-            app["clients"] = clients_dict_to_set(clients)
-            app["receivers"] = receivers
-
-            # mlat update
-            print("Fetching mlat data")
-            async with app["session"].get(
-                "http://mlat-mlat-server:150/sync.json"
-            ) as resp:
-                data = await resp.json()
-                print(data)
-            print("Fetched mlat data")
-            app["mlat_sync_json"] = anonymize_mlat_data(app, data)
-            app["mlat_totalcount_json"] = {
-                "0A": len(app["mlat_sync_json"]),
-                "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
-            }
-            print("Looped..")
-            await asyncio.sleep(1)
+                    print(data)
+                print("Fetched mlat data")
+                app["mlat_sync_json"] = anonymize_mlat_data(app, data)
+                app["mlat_totalcount_json"] = {
+                    "0A": len(app["mlat_sync_json"]),
+                    "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
+                }
+                print("Looped..")
+                await asyncio.sleep(1)
+            except Exception as e:
+                traceback.print_exc()
+                print("Error in background task:", e)
     except asyncio.CancelledError:
-        await session.close()
         print("Background task cancelled")
 
 
