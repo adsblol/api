@@ -119,7 +119,7 @@ def cachehash(app, name):
                 candidate += "".join(
                     random.choices(ascii_letters + digits + "-_", k=15 - len(candidate))
                 )
-        app["mlat_cached_names"][name] = candidate
+            app["mlat_cached_names"][name] = candidate
     except ValueError:
         return name
 
