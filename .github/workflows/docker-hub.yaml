@@ -21,7 +21,7 @@ jobs:
       id: vars
       run: |-
         echo "::set-output name=timestamp::$(date +%s)"
-        echo "::set-output name=short_sha::$(git rev-parse --short HEAD)"
+        echo "::set-output name=short_sha::${GITHUB_SHA::8}"
     - name: Checkout
       uses: actions/checkout@v2
     - name: Docker meta
