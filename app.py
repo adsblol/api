@@ -50,7 +50,7 @@ async def fetch_remote_data(app):
                     data = await resp.json()
                     print(data)
                 print("Fetched mlat data")
-                app["mlat_sync_json"] = anonymize_mlat_data(app, data)
+                app["mlat_sync_json"] = data
                 app["mlat_totalcount_json"] = {
                     "0A": len(app["mlat_sync_json"]),
                     "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
