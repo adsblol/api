@@ -50,7 +50,7 @@ async def fetch_remote_data(app):
                     data = await resp.json()
                     print(data)
                 print("Fetched mlat data")
-                app["mlat_sync_json"] = data
+                app["mlat_sync_json"] = anonymize_mlat_data(app, data)
                 app["mlat_totalcount_json"] = {
                     "0A": len(app["mlat_sync_json"]),
                     "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
@@ -103,20 +103,26 @@ def get_clients_per_ip(clients, ip: str) -> list:
 
 
 def cachehash(app, name):
-    salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
-    if name not in app["mlat_cached_names"]:
-        print("Hashing...")
-        hash = bcrypt.hashpw(name.encode(), salt).decode()
-        cnadidate = name[0:2] + "_" + hash[-12:]
-        # Ensure the candidate has no special characters, and is exactly 15 characters long
-        candidate = "".join(
-            [char for char in cnadidate if char in ascii_letters + digits]
-        )
-        if len(candidate) < 15:
-            candidate += "".join(
-                random.choices(ascii_letters + digits + "-_", k=15 - len(candidate))
+    # Only hash UUIDs
+    try:
+        uuid.UUID(name)
+        salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
+        if name not in app["mlat_cached_names"]:
+            print("Hashing...")
+            hash = bcrypt.hashpw(name.encode(), salt).decode()
+            cnadidate = name[0:2] + "_" + hash[-12:]
+            # Ensure the candidate has no special characters, and is exactly 15 characters long
+            candidate = "".join(
+                [char for char in cnadidate if char in ascii_letters + digits]
             )
+            if len(candidate) < 15:
+                candidate += "".join(
+                    random.choices(ascii_letters + digits + "-_", k=15 - len(candidate))
+                )
         app["mlat_cached_names"][name] = candidate
+    except ValueError:
+        return name
+
     return app["mlat_cached_names"][name]
 
 
