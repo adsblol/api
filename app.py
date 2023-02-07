@@ -110,16 +110,8 @@ def cachehash(app, name):
         if name not in app["mlat_cached_names"]:
             print("Hashing...")
             hash = bcrypt.hashpw(name.encode(), salt).decode()
-            candidate = name[0:3] + "_" + hash[-12:]
-            # Ensure the candidate has no special characters, and is exactly 15 characters long
-            candidate = "".join(
-                [char for char in candidate if char in ascii_letters + digits + "_"]
-            )
-            if len(candidate) < 15:
-                candidate += "".join(
-                    random.choices(ascii_letters + digits + "-_", k=15 - len(candidate))
-                )
-            app["mlat_cached_names"][name] = candidate
+            candidate = "".join([c for c in hash if c.isalnum()])[-13:]
+            app["mlat_cached_names"][name] = name[0:3] + "_" + candidate[-13:]
     except ValueError:
         return name
 
