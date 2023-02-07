@@ -156,6 +156,15 @@ async def uuid(request):
     return web.text_response(str(uuid.uuid4()))
 
 
+@routes.get("/metrics")
+async def metrics(request):
+    metrics = [
+        "adsb_api_beast_total {}".format(len(request.app["receivers"])),
+        "adsb_api_mlat_total {}".format(len(request.app["mlat_sync_json"])),
+    ]
+    return web.Response(text="\n".join(metrics))
+
+
 async def background_tasks(app):
     app["fetch_remote_data"] = asyncio.create_task(fetch_remote_data(app))
 
