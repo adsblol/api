@@ -158,7 +158,7 @@ async def mlat_totalcount_json(request):
 
 
 @routes.get("/api/0/uuid")
-async def uuid(request):
+async def get_uuid(request):
     return web.text_response(str(uuid.uuid4()))
 
 
