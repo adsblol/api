@@ -136,7 +136,7 @@ async def index(request):
     # Return a template index.html with the clients, pass the clients to the template which is a index.html file
 
 
-@routes.get("/api/0/receivers")
+@routes.get("/receivers")
 async def receivers(request):
     return web.json_response(request.app["receivers"])
 
@@ -156,13 +156,13 @@ async def uuid(request):
     return web.text_response(str(uuid.uuid4()))
 
 
-@routes.get("/metrics")
-async def metrics(request):
-    metrics = [
-        "adsb_api_beast_total {}".format(len(request.app["receivers"])),
-        "adsb_api_mlat_total {}".format(len(request.app["mlat_sync_json"])),
-    ]
-    return web.Response(text="\n".join(metrics))
+async def background_tasks(app):
+    app["fetch_remote_data"] = asyncio.create_task(fetch_remote_data(app))
+
+    yield
+
+    app["fetch_remote_data"].cancel()
+    await app["fetch_remote_data"]
 
 
 # aiohttp server
