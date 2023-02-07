@@ -157,7 +157,8 @@ async def get_uuid(request):
 @routes.get("/metrics")
 async def metrics(request):
     metrics = [
-        "adsb_api_beast_total {}".format(len(request.app["receivers"])),
+        "adsb_api_beast_total_receivers {}".format(len(request.app["receivers"])),
+        "adsb_api_beast_total_clients {}".format(len(request.app["clients"])),
         "adsb_api_mlat_total {}".format(len(request.app["mlat_sync_json"])),
     ]
     return web.Response(text="\n".join(metrics))
