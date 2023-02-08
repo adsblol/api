@@ -93,7 +93,8 @@ def beast_clients_to_set(clients):
 def mlat_clients_to_list(clients, ip=None):
     clients_list = []
     keys_to_copy = "user privacy connection source_ip peer_count bad_sync_timeout outlier_percent".split()
-    for client in clients:
+    for name, client in clients.items():
+        print(client)
         if ip is not None and client["source_ip"] != ip:
             continue
         clients_list.append({key: client[key] for key in keys_to_copy if key in client})
