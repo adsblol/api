@@ -185,10 +185,10 @@ async def metrics(request):
 @routes.get("/api/0/me")
 async def api_me(request):
     ip = request.headers["X-Original-Forwarded-For"]
-    clients_set = get_clients_per_ip(request.app["beast_clients"], ip)
-    clients_list = []
-    for client in client:
-        clients_list.append(
+    beast_clients_set = get_clients_per_ip(request.app["beast_clients"], ip)
+    beast_clients_list = []
+    for client in beast_clients_set:
+        beast_clients_list.append(
             {
                 "type": "beast",
                 "hex": client[0],
@@ -202,11 +202,11 @@ async def api_me(request):
     mlat_clients = mlat_clients_to_list(request.app["mlat_clients"], ip)
     response = {
         "feeding": {
-            "beast": len(clients_list) > 0,
+            "beast": len(beast_clients_list) > 0,
             "mlat": len(mlat_clients) > 0,
         },
         "clients": {
-            "beast": clients_list,
+            "beast": beast_clients_list,
             "mlat": mlat_clients,
         },
         "ip": ip,
