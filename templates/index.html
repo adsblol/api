@@ -191,7 +191,6 @@
         </table>
         {% endif %}
         <h3>{{len}} ADSB Feeders (all locations are approximate, and can be off by 50+ km)</h3>
-        <h3>For a more accurate map of feeders, see the <a href="https://map.adsb.lol">MLAT map</a></h3>
     </div>
     <div class="map" id="map"></div>
 
@@ -203,11 +202,11 @@
 
     const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
     // Fetch /receivers and add markers
     // Format: [ [ -1, -2 ], [ -3, -4 ]
-    fetch('/receivers')
+    fetch('/api/0/receivers')
         .then(response => response.json())
         .then(data => {
             data.forEach(receiver => {

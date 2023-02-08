@@ -39,8 +39,8 @@ async def fetch_remote_data(app):
                             receivers.append([lat, lon])
                 print(len(receivers), "receivers")
 
-                app["clients"] = clients_dict_to_set(clients)
-                app["receivers"] = receivers
+                app["beast_clients"] = beast_clients_to_set(clients)
+                app["beast_receivers"] = receivers
 
                 # mlat update
                 print("Fetching mlat data")
@@ -48,13 +48,21 @@ async def fetch_remote_data(app):
                     "http://mlat-mlat-server:150/sync.json"
                 ) as resp:
                     data = await resp.json()
-                    print(data)
-                print("Fetched mlat data")
+                print("Fetched mlat sync.json")
                 app["mlat_sync_json"] = anonymize_mlat_data(app, data)
                 app["mlat_totalcount_json"] = {
                     "0A": len(app["mlat_sync_json"]),
                     "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
                 }
+
+                # mlat clients.json
+                print("Fetching mlat clients.json")
+                async with app["session"].get(
+                    "http://mlat-mlat-server:150/clients.json"
+                ) as resp:
+                    data = await resp.json()
+                app["mlat_clients_json"] = data
+
                 print("Looped..")
                 await asyncio.sleep(1)
             except Exception as e:
@@ -64,7 +72,7 @@ async def fetch_remote_data(app):
         print("Background task cancelled")
 
 
-def clients_dict_to_set(clients):
+def beast_clients_to_set(clients):
     clients_set = set()
     for client in clients:
         hex = client[0]
@@ -80,6 +88,16 @@ def clients_dict_to_set(clients):
             (hex, ip, kbps, conn_time, msg_s, position_s, reduce_signal, positions)
         )
     return clients_set
+
+
+def mlat_clients_to_list(clients, ip=None):
+    clients_list = []
+    keys_to_copy = "user privacy connection source_ip peer_count bad_sync_timeout outlier_percent".split()
+    for client in clients:
+        if ip is not None and client["source_ip"] != ip:
+            continue
+        clients_list.append({key: client[key] for key in keys_to_copy if key in client})
+    return clients_list
 
 
 def anonymize_mlat_data(app, data):
@@ -120,13 +138,13 @@ def cachehash(app, name):
 
 @routes.get("/")
 async def index(request):
-    clients = get_clients_per_ip(
-        request.app["clients"], request.headers["X-Original-Forwarded-For"]
-    )
+    ip = request.headers["X-Original-Forwarded-For"]
+    clients = get_clients_per_ip(request.app["beast_clients"], ip)
     context = {
         "clients": clients,
-        "ip": request.headers["X-Original-Forwarded-For"],
-        "len": len(request.app["clients"]),
+        "mlat_clients": mlat_clients_to_list(request.app["beast_clients"], ip),
+        "ip": ip,
+        "len": len(request.app["beast_clients"]),
     }
     response = aiohttp_jinja2.render_template("index.html", request, context)
     return response
@@ -134,9 +152,9 @@ async def index(request):
     # Return a template index.html with the clients, pass the clients to the template which is a index.html file
 
 
-@routes.get("/receivers")
+@routes.get("/api/0/receivers")
 async def receivers(request):
-    return web.json_response(request.app["receivers"])
+    return web.json_response(request.app["beast_receivers"])
 
 
 @routes.get("/api/0/mlat-server/0A/sync.json")
@@ -157,11 +175,43 @@ async def get_uuid(request):
 @routes.get("/metrics")
 async def metrics(request):
     metrics = [
-        "adsb_api_beast_total_receivers {}".format(len(request.app["receivers"])),
-        "adsb_api_beast_total_clients {}".format(len(request.app["clients"])),
+        "adsb_api_beast_total_receivers {}".format(len(request.app["beast_receivers"])),
+        "adsb_api_beast_total_clients {}".format(len(request.app["beast_clients"])),
         "adsb_api_mlat_total {}".format(len(request.app["mlat_sync_json"])),
     ]
     return web.Response(text="\n".join(metrics))
+
+
+@routes.get("/api/0/me")
+async def api_me(request):
+    ip = request.headers["X-Original-Forwarded-For"]
+    clients_set = get_clients_per_ip(request.app["beast_clients"], ip)
+    clients_list = []
+    for client in client:
+        clients_list.append(
+            {
+                "type": "beast",
+                "hex": client[0],
+                "kbps": client[2],
+                "connected_seconds": client[3],
+                "positions": client[7],
+                "messages_per_second": client[4],
+                "positions_per_second": client[5],
+            }
+        )
+    mlat_clients = mlat_clients_to_list(request.app["mlat_clients"], ip)
+    response = {
+        "feeding": {
+            "beast": len(clients_list) > 0,
+            "mlat": len(mlat_clients) > 0,
+        },
+        "clients": {
+            "beast": clients_list,
+            "mlat": mlat_clients,
+        },
+        "ip": ip,
+    }
+    return web.json_response(response)
 
 
 async def background_tasks(app):
@@ -176,11 +226,12 @@ async def background_tasks(app):
 # aiohttp server
 app = web.Application()
 app.add_routes(routes)
-app["clients"] = set()
-app["receivers"] = []
+app["beast_clients"] = set()
+app["beast_receivers"] = []
 app["mlat_sync_json"] = {}
 app["mlat_totalcount_json"] = {}
 app["mlat_cached_names"] = {}
+app["mlat_clients_json"] = {}
 
 
 async def aiohttp_session_setup(app):
