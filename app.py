@@ -148,6 +148,7 @@ async def index(request):
     context = {
         "clients_beast": clients_beast,
         "clients_mlat": clients_mlat,
+        "own_mlat_clients": len(clients_mlat),
         "ip": ip,
         "len_beast": len(request.app["beast_clients"]),
         "len_mlat": len(request.app["mlat_clients"]),

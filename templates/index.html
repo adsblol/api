@@ -163,42 +163,46 @@
                     aggregators.</p>
         </ul>
 
+        {% set own_beast = clients_beast|length %}
+        {% set own_mlat = clients_mlat|length %}
 
-        {% if not len_mlat %}
-        <h2 style="color: #bbffff">You are not feeding MLAT.</h2>
-        {% else %}
-        <h2 style="color: #bbffff">Feeding MLAT from {{len_mlat}} clients.</h2>
+        {% set own_string = "You are not feeding ADSB or MLAT" %}
+        {% if own_beast > 0 and own_mlat > 0 %}
+        {% set own_string = "You are feeding ADSB (" ~ own_beast ~ " clients) and MLAT (" ~ own_mlat ~ " clients)" %}
+        {% elif own_beast > 0 %}
+        {% set own_string = "You are feeding ADSB (" ~ own_beast ~ " clients)" %}
+        {% elif own_mlat > 0 %}
+        {% set own_string = "You are feeding MLAT (" ~ own_mlat ~ " clients)" %}
         {% endif %}
-
-        {% if not len_beast %}
-        <h2 style="color: #bbffff">You are not feeding ADSB.</h2>
-        {% else %}
-        <h2>Feeding from the following clients:</h2>
-        <!--- Make a table, columns: HEX, IP, KBPS, CONN_TIME, MSG_S, POSITION_S, REDUCE_SIGNAL, POSITIONS -->
-        <table>
-            <tr>
-                <th>ID</th>
-                <th>IP</th>
-                <th>Kbps</th>
-                <th>Time</th>
-                <th>Total Positions</th>
-                <th>Messages/s</th>
-                <th>Positions/s</th>
-                {% for client in clients_beast %}
-            <tr>
-                <td>{{ client[0] }}</td>
-                <td>{{ client[1] }}</td>
-                <td>{{ client[2] }}</td>
-                <td>{{ client[3] }}</td>
-                <td>{{ client[7] }}</td>
-                <td>{{ client[4] }}</td>
-                <td>{{ client[5] }}</td>
-            </tr>
-            {% endfor %}
-        </table>
-        {% endif %}
-        <h3>{{len_beast}} ADSB Feeders (all locations are approximate, and can be off by 50+ km)</h3>
+        <h3 style="color: #bbffff">{{ own_string }}</h3>
+        {% if own_beast > 0 %}
+        <h3>Feeding from the following clients:</h2>
+            <!--- Make a table, columns: HEX, IP, KBPS, CONN_TIME, MSG_S, POSITION_S, REDUCE_SIGNAL, POSITIONS -->
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>IP</th>
+                    <th>Kbps</th>
+                    <th>Time</th>
+                    <th>Total Positions</th>
+                    <th>Messages/s</th>
+                    <th>Positions/s</th>
+                    {% for client in clients_beast %}
+                <tr>
+                    <td>{{ client[0] }}</td>
+                    <td>{{ client[1] }}</td>
+                    <td>{{ client[2] }}</td>
+                    <td>{{ client[3] }}</td>
+                    <td>{{ client[7] }}</td>
+                    <td>{{ client[4] }}</td>
+                    <td>{{ client[5] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% endif %}
+            <h3>{{len_beast}} BEAST feeders. {{len_mlat}} MLAT feeders.</h3>
     </div>
+    <p>All locations are approximate, and off by >50km</p>
     <div class="map" id="map"></div>
 
 </body>
