@@ -11,6 +11,7 @@ import secrets
 from datetime import datetime
 import uuid
 import traceback
+import json
 
 routes = web.RouteTableDef()
 
@@ -212,7 +213,8 @@ async def api_me(request):
         },
         "ip": ip,
     }
-    return web.json_response(response)
+    # Format the response pretty
+    return web.json_response(response, dumps=lambda x: json.dumps(x, indent=4))
 
 
 async def background_tasks(app):
