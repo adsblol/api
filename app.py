@@ -61,7 +61,7 @@ async def fetch_remote_data(app):
                     "http://mlat-mlat-server:150/clients.json"
                 ) as resp:
                     data = await resp.json()
-                app["mlat_clients_json"] = data
+                app["mlat_clients"] = data
 
                 print("Looped..")
                 await asyncio.sleep(1)
@@ -232,7 +232,7 @@ app["beast_receivers"] = []
 app["mlat_sync_json"] = {}
 app["mlat_totalcount_json"] = {}
 app["mlat_cached_names"] = {}
-app["mlat_clients_json"] = {}
+app["mlat_clients"] = {}
 
 
 async def aiohttp_session_setup(app):
