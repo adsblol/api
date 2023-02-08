@@ -151,6 +151,7 @@
         </ul>
         </h2>
         <h2>Feed Information</h2>
+        <h3>Want to find out if you are feeding from the CLI? <code>curl https://adsb.lol/api/0/me</code></h3>
         <ul>
             <li>BEAST: <code>feed.adsb.lol</code> port <code>1337</code> or <code>30004</code>,
                 <code>30005</code>
@@ -162,13 +163,14 @@
                     aggregators.</p>
         </ul>
 
-        {% if not clients_mlat %}
+
+        {% if not len_mlat %}
         <h2 style="color: #bbffff">You are not feeding MLAT.</h2>
         {% else %}
-        <h2 style="color: #bbffff">Feeding MLAT from {{len(mlat_clients)}} clients.</h2>
+        <h2 style="color: #bbffff">Feeding MLAT from {{len_mlat}} clients.</h2>
         {% endif %}
 
-        {% if not clients_beast %}
+        {% if not len_beast %}
         <h2 style="color: #bbffff">You are not feeding ADSB.</h2>
         {% else %}
         <h2>Feeding from the following clients:</h2>

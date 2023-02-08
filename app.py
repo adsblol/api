@@ -141,12 +141,14 @@ def cachehash(app, name):
 @routes.get("/")
 async def index(request):
     ip = request.headers["X-Original-Forwarded-For"]
-    clients = get_clients_per_ip(request.app["beast_clients"], ip)
+    clients_beast = get_clients_per_ip(request.app["beast_clients"], ip)
+    clients_mlat = mlat_clients_to_list(request.app["mlat_clients"], ip)
     context = {
-        "clients_beast": get_clients_per_ip(request.app["beast_clients"], ip),
-        "clients_mlat": mlat_clients_to_list(request.app["mlat_clients"], ip),
+        "clients_beast": clients_beast,
+        "clients_mlat": clients_mlat,
         "ip": ip,
-        "len": len(request.app["beast_clients"]),
+        "len_beast": len(clients_beast),
+        "len_mlat": len(clients_mlat),
     }
     response = aiohttp_jinja2.render_template("index.html", request, context)
     return response
