@@ -142,8 +142,8 @@ async def index(request):
     ip = request.headers["X-Original-Forwarded-For"]
     clients = get_clients_per_ip(request.app["beast_clients"], ip)
     context = {
-        "clients": clients,
-        "mlat_clients": mlat_clients_to_list(request.app["beast_clients"], ip),
+        "clients_beast": get_clients_per_ip(request.app["beast_clients"], ip),
+        "clients_mlat": mlat_clients_to_list(request.app["mlat_clients"], ip),
         "ip": ip,
         "len": len(request.app["beast_clients"]),
     }

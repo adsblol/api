@@ -162,8 +162,13 @@
                     aggregators.</p>
         </ul>
 
+        {% if not clients_mlat %}
+        <h2 style="color: #bbffff">You are not feeding MLAT.</h2>
+        {% else %}
+        <h2 style="color: #bbffff">Feeding MLAT from {{len(mlat_clients)}} clients.</h2>
+        {% endif %}
 
-        {% if not clients %}
+        {% if not clients_beast %}
         <h2 style="color: #bbffff">You are not feeding ADSB.</h2>
         {% else %}
         <h2>Feeding from the following clients:</h2>
@@ -177,7 +182,7 @@
                 <th>Total Positions</th>
                 <th>Messages/s</th>
                 <th>Positions/s</th>
-                {% for client in clients %}
+                {% for client in clients_beast %}
             <tr>
                 <td>{{ client[0] }}</td>
                 <td>{{ client[1] }}</td>
