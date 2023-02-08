@@ -149,8 +149,8 @@ async def index(request):
         "clients_beast": clients_beast,
         "clients_mlat": clients_mlat,
         "ip": ip,
-        "len_beast": len(clients_beast),
-        "len_mlat": len(clients_mlat),
+        "len_beast": len(request.app["beast_clients"]),
+        "len_mlat": len(request.app["mlat_clients"]),
     }
     response = aiohttp_jinja2.render_template("index.html", request, context)
     return response
