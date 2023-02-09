@@ -72,6 +72,21 @@
             font-family: "Courier New", Courier, monospace;
         }
 
+        .green-icon {
+            width: 8px;
+            height: 8px;
+            border-radius: 8px;
+            background: lightgreen;
+            border: 1px solid black;
+        }
+
+        .red-icon {
+            width: 8px;
+            height: 8px;
+            border-radius: 8px;
+            background: red;
+            border: 1px solid black;
+        }
     </style>
 </head>
 
@@ -209,20 +224,53 @@
 </body>
 
 <script>
-    // Global map
-    const map = L.map('map').setView([0, -1], 1);
+    // Custom icons
+    const redIcon = L.divIcon({className: "red-icon", iconSize: new L.Point(8, 8)})
+    const greenIcon = L.divIcon({className: "green-icon", iconSize: new L.Point(8, 8)})
 
-    const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    // Icon layers
+    const adsb = L.layerGroup()
+    const mlat = L.layerGroup()
+
+    // Global map
+    const map = L.map('map', {
+        center: [51.8, 12.9],
+        zoom: 4,
+        layers: [mlat],
+    })
+
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
     }).addTo(map);
-    // Fetch /receivers and add markers
+
+    const layerControl = L.control.layers().addTo(map)
+    layerControl.addOverlay(adsb, "ADS-B feeders")
+    layerControl.addOverlay(mlat, "MLAT feeders")
+
+    // Fetch ADS-B receivers and add markers
     // Format: [ [ -1, -2 ], [ -3, -4 ]
     fetch('/api/0/receivers')
         .then(response => response.json())
         .then(data => {
             data.forEach(receiver => {
-                L.marker([receiver[0], receiver[1]]).addTo(map);
+                L.marker([receiver[0], receiver[1]], {icon: redIcon}).addTo(adsb);
+            });
+        });
+
+    // Fetch MLAT receivers and add markers
+    fetch('/api/0/mlat-server/0A/sync.json')
+        .then(response => response.json())
+        .then(data => {
+            Object.entries(data).forEach(([name, receiver]) => {
+                if (receiver.lat && receiver.lon) {
+                    L.marker([receiver.lat, receiver.lon], {icon: greenIcon}).bindTooltip(
+                        `<b>${name}</b><br>Peers: ${Object.keys(receiver.peers).length}`, {
+                            'direction': 'top'
+                        }
+                    ).addTo(mlat)
+                }
             });
         });
 
