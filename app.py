@@ -180,6 +180,7 @@ async def post_uuid(request):
     generated_uuid = str(uuid.uuid4())
     json_log = json.dumps({"uuid": generated_uuid, "data": data})
     print(json_log)
+    return web.json_response({"uuid": generated_uuid})
 
 
 @routes.get("/metrics")
