@@ -23,9 +23,9 @@ async def fetch_remote_data(app):
                 # clients update
                 ips = ["ingest-readsb:150"]
                 print("Fetching data from", ips)
+                clients = []
+                receivers = []
                 for ip in ips:
-                    clients = []
-                    receivers = []
                     async with app["session"].get(f"http://{ip}/clients.json") as resp:
                         data = await resp.json()
                         clients += data["clients"]
@@ -174,9 +174,12 @@ async def mlat_totalcount_json(request):
     return web.json_response(app["mlat_totalcount_json"])
 
 
-@routes.get("/api/0/uuid")
-async def get_uuid(request):
-    return web.text_response(str(uuid.uuid4()))
+@routes.post("/api/0/uuid")
+async def post_uuid(request):
+    data = await request.json()
+    generated_uuid = str(uuid.uuid4())
+    json_log = json.dumps({"uuid": generated_uuid, "data": data})
+    print(json_log)
 
 
 @routes.get("/metrics")
