@@ -268,7 +268,7 @@ async def v2_point(request):
         request.match_info["lon"],
         min(int(request.match_info["radius"]), 250),
     )
-    res = await request.app["ReAPI"].request(["circle={lat},{lon},{radius}"], request)
+    res = await request.app["ReAPI"].request([f"circle={lat},{lon},{radius}"], request)
     return web.json_response(res)
 
 
