@@ -227,13 +227,14 @@ async def api_me(request):
     return web.json_response(response, dumps=lambda x: json.dumps(x, indent=4))
 
 
-@routes.get("/v2/{generic:pia|mil|ladd}")
+@routes.get("/v2/{generic:pia|mil|ladd|all}")
 async def v2_generic(request):
     generic = request.match_info["generic"]
     allowed = {
         "pia": ["all", "filter_pia"],
         "mil": ["all", "filter_mil"],
         "ladd": ["all", "filter_ladd"],
+        "all": ["all"],
     }
     res = await request.app["ReAPI"].request(allowed[generic], request)
     return web.json_response(res)

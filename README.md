@@ -19,7 +19,7 @@ It runs in Kubernetes and is written in Python / asyncio / aiohttp.
 | [`/v2/ladd`](https://api.adsb.lol/v2/ladd) | GET | All aircraft tagged as LADD |
 | [`/v2/pia`](https://api.adsb.lol/v2/pia) | GET | All aircraft tagged as PIA |
 | [`/v2/point/<lat>/<lon>/<radius>`](https://api.adsb.lol/v2/point/55/55/250) | GET | All aircraft within a certain radius of a given point up to 250 nm |
-
+| [`/v2/all`](https://api.adsb.lol/v2/all) | GET | All the aircrafts! |
 ## Rate limits
 
 Currently, there are no rate limits on the API. However, if you are using the API in a production environment, please contact me. I would like to know who is using the API and how it is being used.
