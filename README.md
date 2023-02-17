@@ -22,7 +22,7 @@ It runs in Kubernetes and is written in Python / asyncio / aiohttp.
 | [`/v2/all`](https://api.adsb.lol/v2/all) | GET | All the aircrafts! |
 ## Rate limits
 
-Currently, there are no rate limits on the API. However, if you are using the API in a production environment, please contact me. I would like to know who is using the API and how it is being used.
+Currently, there are no rate limits on the API. If you are using the API in a production environment, let me know so I don't break your app in case the API changes.
 
 In the future, I may add rate limits to the API.
 
