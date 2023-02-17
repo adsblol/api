@@ -12,6 +12,7 @@ from datetime import datetime
 import uuid
 import traceback
 import json
+from utils.reapi import ReAPI
 
 routes = web.RouteTableDef()
 
@@ -226,6 +227,50 @@ async def api_me(request):
     return web.json_response(response, dumps=lambda x: json.dumps(x, indent=4))
 
 
+@routes.get("/v2/{generic}")
+async def v2_generic(request):
+    generic = request.match_info["generic"]
+    allowed = {
+        "pia": "all&filter_pia",
+        "mil": "all&filter_mil",
+        "ladd": "all&filter_ladd",
+    }
+    if generic not in allowed.keys():
+        print(f"v2_generic: {generic} not in allowed keys")
+        return web.Response(status=404)
+    res = await request.app["ReAPI"].request(allowed[generic], request)
+    return web.json_response(res)
+
+
+@routes.get("/v2/{generic}/{filter}")
+async def v2_generic_filter(request):
+    generic, filter = request.match_info["generic"], request.match_info["filter"]
+    allowed = {
+        "squawk": f"all&find_squawk={filter}",
+        "type": f"all&find_type={filter}",
+        "reg": f"all&find_reg={filter}",
+    }
+    if generic not in allowed.keys():
+        return web.Response(status=404)
+    if not filter.isalnum():
+        return web.Response(status=500)
+    res = await request.app["ReAPI"].request(
+        allowed[generic] + "&filter_" + filter, request
+    )
+    return web.json_response(res)
+
+
+@routes.get("/v2/point/{lat}/{lon}/{radius}")
+async def v2_point(request):
+    lat, lon, radius = (
+        request.match_info["lat"],
+        request.match_info["lon"],
+        min(int(request.match_info["radius"]), 250),
+    )
+    res = await request.app["ReAPI"].request(f"circle={lat},{lon},{radius}", request)
+    return web.json_response(res)
+
+
 async def background_tasks(app):
     app["fetch_remote_data"] = asyncio.create_task(fetch_remote_data(app))
 
@@ -244,6 +289,7 @@ app["mlat_sync_json"] = {}
 app["mlat_totalcount_json"] = {}
 app["mlat_cached_names"] = {}
 app["mlat_clients"] = {}
+app["ReAPI"] = ReAPI("http://reapi-readsb:30152/re-api/")
 
 
 async def aiohttp_session_setup(app):
