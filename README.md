@@ -13,9 +13,9 @@ It runs in Kubernetes and is written in Python / asyncio / aiohttp.
 | [`/v2/reg/<reg[,reg,...]>`](https://api.adsb.lol/v2/reg/PH-BHP) | GET | All aircraft with an exact match on one of the given registrations (limited to 1000 or 8000 characters for the request) |
 | [`/v2/type/<type[,type,...]>`](https://api.adsb.lol/v2/type/A321) | GET | All aircraft that have one of the specified ICAO type codes (A321, B738, etc.) |
 | [`/v2/squawk/<squawk[,squawk,...]>`](https://api.adsb.lol/v2/squawk/1200) | GET | All aircraft that are squawking the specified value |
-| [`/v2/mil/`](https://api.adsb.lol/v2/mil/) | GET | All aircraft tagged as military |
-| [`/v2/ladd/`](https://api.adsb.lol/v2/ladd/) | GET | All aircraft tagged as LADD |
-| [`/v2/pia/`](https://api.adsb.lol/v2/pia/) | GET | All aircraft tagged as PIA |
+| [`/v2/mil`](https://api.adsb.lol/v2/mil) | GET | All aircraft tagged as military |
+| [`/v2/ladd`](https://api.adsb.lol/v2/ladd) | GET | All aircraft tagged as LADD |
+| [`/v2/pia`](https://api.adsb.lol/v2/pia) | GET | All aircraft tagged as PIA |
 | [`/v2/point/<lat>/<lon>/<radius>`](https://api.adsb.lol/v2/point/55/55/250) | GET | All aircraft within a certain radius of a given point up to 250 nm |
 
 ## Rate limits
