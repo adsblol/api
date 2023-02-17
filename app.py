@@ -249,6 +249,8 @@ async def v2_generic_filter(request):
         "squawk": f"all&find_squawk={filter}",
         "type": f"all&find_type={filter}",
         "reg": f"all&find_reg={filter}",
+        "hex": f"all&find_hex={filter}",
+        "callsign": f"all&find_callsign={filter}",
     }
     if generic not in allowed.keys():
         return web.Response(status=404)
