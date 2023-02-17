@@ -255,7 +255,7 @@ async def v2_generic_filter(request):
     if not filter.isalnum():
         return web.Response(status=500)
     res = await request.app["ReAPI"].request(
-        allowed[generic] + "&filter_" + filter, request
+        allowed[generic]
     )
     return web.json_response(res)
 
