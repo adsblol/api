@@ -227,7 +227,7 @@ async def api_me(request):
     return web.json_response(response, dumps=lambda x: json.dumps(x, indent=4))
 
 
-@routes.get("/v2/{generic}")
+@routes.get("/v2/{generic:pia|mil|ladd}")
 async def v2_generic(request):
     generic = request.match_info["generic"]
     allowed = {
@@ -235,28 +235,21 @@ async def v2_generic(request):
         "mil": ["all", "filter_mil"],
         "ladd": ["all", "filter_ladd"],
     }
-    if generic not in allowed.keys():
-        print(f"v2_generic: {generic} not in allowed keys")
-        return web.Response(status=404)
     res = await request.app["ReAPI"].request(allowed[generic], request)
     return web.json_response(res)
 
 
-@routes.get("/v2/{generic}/{filter}")
+@routes.get("/v2/{generic:squawk|type|reg|hex|callsign}/{filter}")
 async def v2_generic_filter(request):
     generic, filter = request.match_info["generic"], request.match_info["filter"]
     # Fix that so it is a list
     allowed = {
-        "squawk": [f"find_squawk={filter}"],
+        "squawk": ["all", f"filter_squawk={filter}"],
         "type": [f"find_type={filter}"],
         "reg": [f"find_reg={filter}"],
         "hex": [f"find_hex={filter}"],
         "callsign": [f"find_callsign={filter}"],
     }
-    if generic not in allowed.keys():
-        return web.Response(status=404)
-    if not filter.isalnum():
-        return web.Response(status=500)
     res = await request.app["ReAPI"].request(allowed[generic], request)
     return web.json_response(res)
 
