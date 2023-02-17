@@ -6,7 +6,7 @@ class ReAPI:
     def __init__(self, host):
         self.host = host
         # allow alphanumeric + , + = + _ + .
-        self.allowed = re.compile(r"^[a-zA-Z0-9,=_\.]+$")
+        self.allowed = re.compile(r"^[a-zA-Z0-9,=_\.-]+$")
 
     def get_ip(self, request):
         if not request:
