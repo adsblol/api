@@ -247,11 +247,11 @@ async def v2_generic_filter(request):
     generic, filter = request.match_info["generic"], request.match_info["filter"]
     # Fix that so it is a list
     allowed = {
-        "squawk": ["all", f"find_squawk={filter}"],
-        "type": ["all", f"find_type={filter}"],
-        "reg": ["all", f"find_reg={filter}"],
-        "hex": ["all", f"find_hex={filter}"],
-        "callsign": ["all", f"find_callsign={filter}"],
+        "squawk": [f"find_squawk={filter}"],
+        "type": [f"find_type={filter}"],
+        "reg": [f"find_reg={filter}"],
+        "hex": [f"find_hex={filter}"],
+        "callsign": [f"find_callsign={filter}"],
     }
     if generic not in allowed.keys():
         return web.Response(status=404)
