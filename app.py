@@ -231,9 +231,9 @@ async def api_me(request):
 async def v2_generic(request):
     generic = request.match_info["generic"]
     allowed = {
-        "pia": "all&filter_pia",
-        "mil": "all&filter_mil",
-        "ladd": "all&filter_ladd",
+        "pia": ["all", "filter_pia"],
+        "mil": ["all", "filter_mil"],
+        "ladd": ["all", "filter_ladd"],
     }
     if generic not in allowed.keys():
         print(f"v2_generic: {generic} not in allowed keys")
@@ -245,12 +245,13 @@ async def v2_generic(request):
 @routes.get("/v2/{generic}/{filter}")
 async def v2_generic_filter(request):
     generic, filter = request.match_info["generic"], request.match_info["filter"]
+    # Fix that so it is a list
     allowed = {
-        "squawk": f"all&find_squawk={filter}",
-        "type": f"all&find_type={filter}",
-        "reg": f"all&find_reg={filter}",
-        "hex": f"all&find_hex={filter}",
-        "callsign": f"all&find_callsign={filter}",
+        "squawk": ["all", f"find_squawk={filter}"],
+        "type": ["all", f"find_type={filter}"],
+        "reg": ["all", f"find_reg={filter}"],
+        "hex": ["all", f"find_hex={filter}"],
+        "callsign": ["all", f"find_callsign={filter}"],
     }
     if generic not in allowed.keys():
         return web.Response(status=404)
@@ -267,7 +268,7 @@ async def v2_point(request):
         request.match_info["lon"],
         min(int(request.match_info["radius"]), 250),
     )
-    res = await request.app["ReAPI"].request(f"circle={lat},{lon},{radius}", request)
+    res = await request.app["ReAPI"].request(["circle={lat},{lon},{radius}"], request)
     return web.json_response(res)
 
 
