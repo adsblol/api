@@ -4,6 +4,8 @@ This is the source code for the [adsb.lol](https://adsb.lol) API.
 
 It runs in Kubernetes and is written in Python / asyncio / aiohttp.
 
+**This API is compatible with the ADSBExchange Rapid API. It is a drop-in replacement.**
+
 # Usage
 
 | Endpoint | Method | Returns |
