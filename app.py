@@ -26,6 +26,7 @@ templates = Jinja2Templates(directory="/app/templates")
 class ApiUuidRequest(BaseModel):
     version: str
 
+
 class PrettyJSONResponse(Response):
     media_type = "application/json"
 
@@ -36,11 +37,11 @@ class PrettyJSONResponse(Response):
             allow_nan=False,
             indent=2,
             separators=(",", ":"),
-            sort_keys=True
+            sort_keys=True,
         ).encode("utf-8")
 
-class Provider(object):
 
+class Provider(object):
     def __init__(self):
         self.beast_clients = set()
         self.beast_receivers = []
@@ -70,7 +71,9 @@ class Provider(object):
                     clients = []
                     receivers = []
                     for ip in ips:
-                        async with self.client_session.get(f"http://{ip}/clients.json") as resp:
+                        async with self.client_session.get(
+                            f"http://{ip}/clients.json"
+                        ) as resp:
                             data = await resp.json()
                             clients += data["clients"]
                             print(len(clients), "clients")
@@ -117,7 +120,6 @@ class Provider(object):
         except asyncio.CancelledError:
             print("Background task cancelled")
 
-
     @staticmethod
     def beast_clients_to_set(clients):
         clients_set = set()
@@ -136,20 +138,18 @@ class Provider(object):
             )
         return clients_set
 
-
     @staticmethod
     def mlat_clients_to_list(clients, ip=None):
         clients_list = []
-        keys_to_copy = (
-            "user privacy connection peer_count bad_sync_timeout outlier_percent".split()
-        )
+        keys_to_copy = "user privacy connection peer_count bad_sync_timeout outlier_percent".split()
         for name, client in clients.items():
             print(client)
             if ip is not None and client["source_ip"] != ip:
                 continue
-            clients_list.append({key: client[key] for key in keys_to_copy if key in client})
+            clients_list.append(
+                {key: client[key] for key in keys_to_copy if key in client}
+            )
         return clients_list
-
 
     def anonymize_mlat_data(self, data):
         sanitized_data = {}
@@ -166,7 +166,6 @@ class Provider(object):
 
         return sanitized_data
 
-
     @staticmethod
     def get_clients_per_client_ip(clients, ip: str) -> list:
         return [client for client in clients if client[1] == ip]
@@ -182,7 +181,7 @@ class Provider(object):
             name_id = name[0:3] + "_" + candidate[-13:]
             return name_id
         except ValueError:
-            print(f'Unable to hash {name[:4]}...')
+            print(f"Unable to hash {name[:4]}...")
             return name
 
 
@@ -200,12 +199,16 @@ async def shutdown_event():
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request : Request, x_original_forwarded_for : str | None = Header(default=None)):
+async def index(
+    request: Request, x_original_forwarded_for: str | None = Header(default=None)
+):
     """
     Return a template index.html with the clients.
     """
     client_ip = x_original_forwarded_for
-    clients_beast = provider.get_clients_per_client_ip(provider.beast_clients, client_ip)
+    clients_beast = provider.get_clients_per_client_ip(
+        provider.beast_clients, client_ip
+    )
     clients_mlat = provider.mlat_clients_to_list(provider.mlat_clients, client_ip)
     context = {
         "clients_beast": clients_beast,
@@ -215,7 +218,9 @@ async def index(request : Request, x_original_forwarded_for : str | None = Heade
         "len_beast": len(provider.beast_clients),
         "len_mlat": len(provider.mlat_clients),
     }
-    response = templates.TemplateResponse("index.html", {"request": request, "context": context})
+    response = templates.TemplateResponse(
+        "index.html", {"request": request, "context": context}
+    )
     return response
 
 
@@ -252,13 +257,15 @@ async def metrics():
         "adsb_api_beast_total_clients {}".format(len(provider.beast_clients)),
         "adsb_api_mlat_total {}".format(len(provider.mlat_sync_json)),
     ]
-    return Response(content="\n".join(metrics), media_type='text/plain')
+    return Response(content="\n".join(metrics), media_type="text/plain")
 
 
 @app.get("/api/0/me", response_class=PrettyJSONResponse)
-async def api_me(x_original_forwarded_for : str | None = Header(default=None)):
+async def api_me(x_original_forwarded_for: str | None = Header(default=None)):
     client_ip = x_original_forwarded_for
-    beast_clients_set = provider.get_clients_per_client_ip(provider.beast_clients, client_ip)
+    beast_clients_set = provider.get_clients_per_client_ip(
+        provider.beast_clients, client_ip
+    )
     beast_clients_list = []
     for client in beast_clients_set:
         beast_clients_list.append(
@@ -290,9 +297,9 @@ async def api_me(x_original_forwarded_for : str | None = Header(default=None)):
 
 @app.get("/v2/{generic}", response_class=PrettyJSONResponse)
 async def v2_generic(
-        generic: str = Query(default=..., regex='pia|mil|ladd|all'),
-        x_original_forwarded_for : str | None = Header(default=None),
-        ):
+    generic: str = Query(default=..., regex="pia|mil|ladd|all"),
+    x_original_forwarded_for: str | None = Header(default=None),
+):
     client_ip = x_original_forwarded_for
 
     allowed = {
@@ -306,10 +313,11 @@ async def v2_generic(
 
 
 @app.get("/v2/{generic}/{filter}", response_class=PrettyJSONResponse)
-async def v2_generic_filter(generic: str = Query(default=..., regex='squawk|type|reg|hex|callsign'),
-                            _filter: str = Query(default=..., alias='filter'),
-                            x_original_forwarded_for : str | None = Header(default=None),
-                            ):
+async def v2_generic_filter(
+    generic: str = Query(default=..., regex="squawk|type|reg|hex|callsign"),
+    _filter: str = Query(default=..., alias="filter"),
+    x_original_forwarded_for: str | None = Header(default=None),
+):
     client_ip = x_original_forwarded_for
 
     # Fix that so it is a list
@@ -325,16 +333,21 @@ async def v2_generic_filter(generic: str = Query(default=..., regex='squawk|type
 
 
 @app.get("/v2/point/{lat}/{lon}/{radius}", response_class=PrettyJSONResponse)
-async def v2_point(lat: float, lon: float, radius: int,
-                   x_original_forwarded_for : str | None = Header(default=None),
-                   ):
+async def v2_point(
+    lat: float,
+    lon: float,
+    radius: int,
+    x_original_forwarded_for: str | None = Header(default=None),
+):
     radius = min(radius, 250)
     client_ip = x_original_forwarded_for
 
-    res = await provider.ReAPI.request(params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip)
+    res = await provider.ReAPI.request(
+        params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip
+    )
     return res
 
 
 if __name__ == "__main__":
-    print('Run with:')
-    print('uvicorn app:app --host 0.0.0.0 --port 80')
+    print("Run with:")
+    print("uvicorn app:app --host 0.0.0.0 --port 80")
