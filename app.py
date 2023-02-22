@@ -198,7 +198,7 @@ async def shutdown_event():
     await provider.shutdown()
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index(
     request: Request, x_original_forwarded_for: str | None = Header(default=None)
 ):
@@ -224,22 +224,22 @@ async def index(
     return response
 
 
-@app.get("/api/0/receivers", response_class=PrettyJSONResponse)
+@app.get("/api/0/receivers", response_class=PrettyJSONResponse, include_in_schema=False)
 async def receivers():
     return provider.beast_receivers
 
 
-@app.get("/api/0/mlat-server/0A/sync.json", response_class=PrettyJSONResponse)
+@app.get("/api/0/mlat-server/0A/sync.json", response_class=PrettyJSONResponse, include_in_schema=False)
 async def mlat_receivers():
     return provider.mlat_sync_json
 
 
-@app.get("/api/0/mlat-server/totalcount.json", response_class=PrettyJSONResponse)
+@app.get("/api/0/mlat-server/totalcount.json", response_class=PrettyJSONResponse, include_in_schema=False)
 async def mlat_totalcount_json():
     return provider.mlat_totalcount_json
 
 
-@app.post("/api/0/uuid", response_class=PrettyJSONResponse)
+@app.post("/api/0/uuid", response_class=PrettyJSONResponse, include_in_schema=False)
 async def post_uuid(data: ApiUuidRequest):
     generated_uuid = str(uuid.uuid4())
     json_log = json.dumps({"uuid": generated_uuid, "data": data.dict()})
@@ -247,7 +247,7 @@ async def post_uuid(data: ApiUuidRequest):
     return {"uuid": generated_uuid}
 
 
-@app.get("/metrics")
+@app.get("/metrics", include_in_schema=False)
 async def metrics():
     """
     Return metrics for Prometheus
