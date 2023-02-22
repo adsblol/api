@@ -1,17 +1,12 @@
-import os
-from string import ascii_letters, digits
-import random
 import asyncio
 import aiohttp
-import aiohttp_jinja2
-import jinja2
 from aiohttp import web
 import bcrypt
-import secrets
 from datetime import datetime
 import uuid
 import traceback
 import json
+import typing
 from utils.reapi import ReAPI
 from functools import lru_cache
 
@@ -31,6 +26,18 @@ templates = Jinja2Templates(directory="/app/templates")
 class ApiUuidRequest(BaseModel):
     version: str
 
+class PrettyJSONResponse(Response):
+    media_type = "application/json"
+
+    def render(self, content: typing.Any) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=2,
+            separators=(",", ":"),
+            sort_keys=True
+        ).encode("utf-8")
 
 class Provider(object):
 
@@ -47,10 +54,10 @@ class Provider(object):
             raise_for_status=True,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
-        self.bg_taks = asyncio.create_task(self.fetch_remote_data())
+        self.bg_task = asyncio.create_task(self.fetch_remote_data())
 
     async def shutdown(self):
-        await self.bg_task.cancel()
+        self.bg_task.cancel()
         await self.client_session.close()
 
     async def fetch_remote_data(self):
@@ -77,7 +84,7 @@ class Provider(object):
                                 receivers.append([lat, lon])
                     print(len(receivers), "receivers")
 
-                    self.beast_clients = beast_clients_to_set(clients)
+                    self.beast_clients = self.beast_clients_to_set(clients)
                     self.beast_receivers = receivers
 
                     # mlat update
@@ -212,25 +219,25 @@ async def index(request : Request, x_original_forwarded_for : str | None = Heade
     return response
 
 
-@app.get("/api/0/receivers")
+@app.get("/api/0/receivers", response_class=PrettyJSONResponse)
 async def receivers():
     return provider.beast_receivers
 
 
-@app.get("/api/0/mlat-server/0A/sync.json")
+@app.get("/api/0/mlat-server/0A/sync.json", response_class=PrettyJSONResponse)
 async def mlat_receivers():
     return provider.mlat_sync_json
 
 
-@app.get("/api/0/mlat-server/totalcount.json")
+@app.get("/api/0/mlat-server/totalcount.json", response_class=PrettyJSONResponse)
 async def mlat_totalcount_json():
     return provider.mlat_totalcount_json
 
 
-@app.post("/api/0/uuid")
+@app.post("/api/0/uuid", response_class=PrettyJSONResponse)
 async def post_uuid(data: ApiUuidRequest):
     generated_uuid = str(uuid.uuid4())
-    json_log = json.dumps({"uuid": generated_uuid, "data": data})
+    json_log = json.dumps({"uuid": generated_uuid, "data": data.dict()})
     print(json_log)
     return {"uuid": generated_uuid}
 
@@ -248,7 +255,7 @@ async def metrics():
     return Response(content="\n".join(metrics), media_type='text/plain')
 
 
-@app.get("/api/0/me")
+@app.get("/api/0/me", response_class=PrettyJSONResponse)
 async def api_me(x_original_forwarded_for : str | None = Header(default=None)):
     client_ip = x_original_forwarded_for
     beast_clients_set = provider.get_clients_per_client_ip(provider.beast_clients, client_ip)
@@ -277,11 +284,11 @@ async def api_me(x_original_forwarded_for : str | None = Header(default=None)):
         },
         "client_ip": client_ip,
     }
-    # Format the response pretty
-    return web.json_response(response, dumps=lambda x: json.dumps(x, indent=4))
+
+    return response
 
 
-@app.get("/v2/{generic}")
+@app.get("/v2/{generic}", response_class=PrettyJSONResponse)
 async def v2_generic(
         generic: str = Query(default=..., regex='pia|mil|ladd|all'),
         x_original_forwarded_for : str | None = Header(default=None),
@@ -295,10 +302,10 @@ async def v2_generic(
         "all": ["all"],
     }
     res = await provider.ReAPI.request(params=allowed[generic], client_ip=client_ip)
-    return web.json_response(res)
+    return res
 
 
-@app.get("/v2/{generic}/{filter}")
+@app.get("/v2/{generic}/{filter}", response_class=PrettyJSONResponse)
 async def v2_generic_filter(generic: str = Query(default=..., regex='squawk|type|reg|hex|callsign'),
                             _filter: str = Query(default=..., alias='filter'),
                             x_original_forwarded_for : str | None = Header(default=None),
@@ -314,15 +321,18 @@ async def v2_generic_filter(generic: str = Query(default=..., regex='squawk|type
         "callsign": [f"find_callsign={filter}"],
     }
     res = await provider.ReAPI.request(params=allowed[generic], client_ip=client_ip)
-    return web.json_response(res)
+    return res
 
 
-@app.get("/v2/point/{lat}/{lon}/{radius}")
-async def v2_point(lat: float, lon: float, radius: int):
+@app.get("/v2/point/{lat}/{lon}/{radius}", response_class=PrettyJSONResponse)
+async def v2_point(lat: float, lon: float, radius: int,
+                   x_original_forwarded_for : str | None = Header(default=None),
+                   ):
     radius = min(radius, 250)
+    client_ip = x_original_forwarded_for
 
     res = await provider.ReAPI.request(params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip)
-    return web.json_response(res)
+    return res
 
 
 if __name__ == "__main__":
