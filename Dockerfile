@@ -10,5 +10,7 @@ RUN apk add --virtual=.build-deps gcc musl-dev libffi-dev openssl-dev python3-de
     apk del .build-deps
 
 COPY . /app
-CMD python /app/app.py
+CMD uvicorn app:app --host 0.0.0.0 --port 80
+
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1

@@ -5,14 +5,9 @@ import re
 class ReAPI:
     def __init__(self, host):
         self.host = host
+
         # allow alphanumeric + , + = + _ + .
         self.allowed = re.compile(r"^[a-zA-Z0-9,=_\.-]+$")
-
-    def get_ip(self, request):
-        if not request:
-            return "unknown"
-        else:
-            return request.headers.get("X-Original-Forwarded-For")
 
     def are_params_valid(self, params):
         for param in params:
@@ -20,13 +15,14 @@ class ReAPI:
                 return False
         return True
 
-    async def request(self, params, request=None):
+    async def request(self, params, client_ip=None):
         if not self.are_params_valid(params):
             return {"error": "invalid params"}
+
         params.append("jv2")
 
         url = self.host + "?" + "&".join(params)
-        log = {"ip": self.get_ip(request), "params": params, "url": url, "type": "reapi"}
+        log = {"ip": client_ip, "params": params, "url": url, "type": "reapi"}
         print(log)
 
         timeout = aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0)
