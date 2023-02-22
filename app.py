@@ -25,7 +25,6 @@ from pydantic import BaseModel
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 templates = Jinja2Templates(directory="/app/templates")
 
 
@@ -44,7 +43,7 @@ class Provider(object):
         self.ReAPI = ReAPI("http://reapi-readsb:30152/re-api/")
 
     async def startup(self):
-        self.client_session = await aiohttp.ClientSession(
+        self.client_session = aiohttp.ClientSession(
             raise_for_status=True,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
@@ -106,7 +105,8 @@ class Provider(object):
                     await asyncio.sleep(1)
                 except Exception as e:
                     traceback.print_exc()
-                    print("Error in background task:", e)
+                    print("Error in background task, retry in 10s:", e)
+                    await asyncio.sleep(10)
         except asyncio.CancelledError:
             print("Background task cancelled")
 
@@ -161,7 +161,7 @@ class Provider(object):
 
 
     @staticmethod
-    def get_clients_per_ip(clients, ip: str) -> list:
+    def get_clients_per_client_ip(clients, ip: str) -> list:
         return [client for client in clients if client[1] == ip]
 
     @lru_cache(maxsize=1024)
