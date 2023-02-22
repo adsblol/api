@@ -217,10 +217,9 @@ async def index(
         "ip": client_ip,
         "len_beast": len(provider.beast_clients),
         "len_mlat": len(provider.mlat_clients),
+        "request": request,
     }
-    response = templates.TemplateResponse(
-        "index.html", {"request": request, "context": context}
-    )
+    response = templates.TemplateResponse("index.html", context)
     return response
 
 
@@ -229,12 +228,20 @@ async def receivers():
     return provider.beast_receivers
 
 
-@app.get("/api/0/mlat-server/0A/sync.json", response_class=PrettyJSONResponse, include_in_schema=False)
+@app.get(
+    "/api/0/mlat-server/0A/sync.json",
+    response_class=PrettyJSONResponse,
+    include_in_schema=False,
+)
 async def mlat_receivers():
     return provider.mlat_sync_json
 
 
-@app.get("/api/0/mlat-server/totalcount.json", response_class=PrettyJSONResponse, include_in_schema=False)
+@app.get(
+    "/api/0/mlat-server/totalcount.json",
+    response_class=PrettyJSONResponse,
+    include_in_schema=False,
+)
 async def mlat_totalcount_json():
     return provider.mlat_totalcount_json
 
