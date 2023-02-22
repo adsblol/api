@@ -322,11 +322,11 @@ async def v2_generic_filter(
 
     # Fix that so it is a list
     allowed = {
-        "squawk": ["all", f"filter_squawk={filter}"],
-        "type": [f"find_type={filter}"],
-        "reg": [f"find_reg={filter}"],
-        "hex": [f"find_hex={filter}"],
-        "callsign": [f"find_callsign={filter}"],
+        "squawk": ["all", f"filter_squawk={_filter}"],
+        "type": [f"find_type={_filter}"],
+        "reg": [f"find_reg={_filter}"],
+        "hex": [f"find_hex={_filter}"],
+        "callsign": [f"find_callsign={_filter}"],
     }
     res = await provider.ReAPI.request(params=allowed[generic], client_ip=client_ip)
     return res
