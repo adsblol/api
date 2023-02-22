@@ -261,7 +261,9 @@ async def metrics():
 
 
 @app.get("/api/0/me", response_class=PrettyJSONResponse)
-async def api_me(x_original_forwarded_for: str | None = Header(default=None)):
+async def api_me(
+    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
+):
     client_ip = x_original_forwarded_for
     beast_clients_set = provider.get_clients_per_client_ip(
         provider.beast_clients, client_ip
@@ -297,8 +299,11 @@ async def api_me(x_original_forwarded_for: str | None = Header(default=None)):
 
 @app.get("/v2/{generic}", response_class=PrettyJSONResponse)
 async def v2_generic(
-    generic: str = Query(default=..., regex="pia|mil|ladd|all"),
-    x_original_forwarded_for: str | None = Header(default=None),
+    generic: str = Query(
+        default=..., regex="pia|mil|ladd|all", description="One of: pia|mil|ladd|all"
+    ),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
 ):
     client_ip = x_original_forwarded_for
 
@@ -312,21 +317,26 @@ async def v2_generic(
     return res
 
 
-@app.get("/v2/{generic}/{filter}", response_class=PrettyJSONResponse)
+@app.get("/v2/{generic}/{filter_string}", response_class=PrettyJSONResponse)
 async def v2_generic_filter(
-    generic: str = Query(default=..., regex="squawk|type|reg|hex|callsign"),
-    _filter: str = Query(default=..., alias="filter"),
-    x_original_forwarded_for: str | None = Header(default=None),
+    generic: str = Query(
+        default=...,
+        regex="squawk|type|reg|hex|callsign",
+        description="One of: squawk|type|reg|hex|callsign",
+    ),
+    filter_string: str = Query(default=...),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
 ):
     client_ip = x_original_forwarded_for
 
     # Fix that so it is a list
     allowed = {
-        "squawk": ["all", f"filter_squawk={_filter}"],
-        "type": [f"find_type={_filter}"],
-        "reg": [f"find_reg={_filter}"],
-        "hex": [f"find_hex={_filter}"],
-        "callsign": [f"find_callsign={_filter}"],
+        "squawk": ["all", f"filter_squawk={filter_string}"],
+        "type": [f"find_type={filter_string}"],
+        "reg": [f"find_reg={filter_string}"],
+        "hex": [f"find_hex={filter_string}"],
+        "callsign": [f"find_callsign={filter_string}"],
     }
     res = await provider.ReAPI.request(params=allowed[generic], client_ip=client_ip)
     return res
@@ -337,7 +347,8 @@ async def v2_point(
     lat: float,
     lon: float,
     radius: int,
-    x_original_forwarded_for: str | None = Header(default=None),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
 ):
     radius = min(radius, 250)
     client_ip = x_original_forwarded_for
