@@ -203,7 +203,7 @@ async def index(
     request: Request, x_original_forwarded_for: str | None = Header(default=None)
 ):
     """
-    Return a template index.html with the clients.
+    Return the index.html page with the client numbers.
     """
     client_ip = x_original_forwarded_for
     clients_beast = provider.get_clients_per_client_ip(
@@ -304,48 +304,143 @@ async def api_me(
     return response
 
 
-@app.get("/v2/{generic}", response_class=PrettyJSONResponse)
-async def v2_generic(
-    generic: str = Query(
-        default=..., regex="pia|mil|ladd|all", description="One of: pia|mil|ladd|all"
-    ),
+@app.get("/v2/pia", response_class=PrettyJSONResponse)
+async def v2_pia(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ):
+    """
+    Returns all aircraft with [PIA](https://nbaa.org/aircraft-operations/security/privacy/privacy-icao-address-pia/) addresses.
+    """
     client_ip = x_original_forwarded_for
+    params = ["all", "filter_pia"]
 
-    allowed = {
-        "pia": ["all", "filter_pia"],
-        "mil": ["all", "filter_mil"],
-        "ladd": ["all", "filter_ladd"],
-        "all": ["all"],
-    }
-    res = await provider.ReAPI.request(params=allowed[generic], client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
     return res
 
 
-@app.get("/v2/{generic}/{filter_string}", response_class=PrettyJSONResponse)
-async def v2_generic_filter(
-    generic: str = Query(
-        default=...,
-        regex="squawk|type|reg|hex|callsign",
-        description="One of: squawk|type|reg|hex|callsign",
-    ),
-    filter_string: str = Query(default=...),
+@app.get("/v2/mil", response_class=PrettyJSONResponse)
+async def v2_mil(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ):
+    """
+    Returns all military registered aircraft.
+    """
     client_ip = x_original_forwarded_for
+    params = ["all", "filter_mil"]
 
-    # Fix that so it is a list
-    allowed = {
-        "squawk": ["all", f"filter_squawk={filter_string}"],
-        "type": [f"find_type={filter_string}"],
-        "reg": [f"find_reg={filter_string}"],
-        "hex": [f"find_hex={filter_string}"],
-        "callsign": [f"find_callsign={filter_string}"],
-    }
-    res = await provider.ReAPI.request(params=allowed[generic], client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    return res
+
+
+@app.get("/v2/ladd", response_class=PrettyJSONResponse)
+async def v2_ladd(
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+):
+    """
+    Returns all aircrafto on [LADD](https://www.faa.gov/pilots/ladd) filter.
+    """
+    client_ip = x_original_forwarded_for
+    params = ["all", "filter_ladd"]
+
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    return res
+
+
+@app.get("/v2/all", response_class=PrettyJSONResponse)
+async def v2_all(
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+):
+    """
+    Returns all [aircraft](https://en.wikipedia.org/wiki/Aircraft).
+    """
+    client_ip = x_original_forwarded_for
+    params = ["all"]
+
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    return res
+
+
+@app.get("/v2/squawk/{filter_string}", response_class=PrettyJSONResponse)
+async def v2_squawk_filter(
+    filter_string: str = Query(default=..., example="1200"),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+):
+    """
+    Returns aircraft filtered by "squawk" [transponder code](https://en.wikipedia.org/wiki/List_of_transponder_codes).
+    """
+    client_ip = x_original_forwarded_for
+    params = ["all", f"filter_squawk={filter_string}"]
+
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    return res
+
+
+@app.get("/v2/type/{filter_string}", response_class=PrettyJSONResponse)
+async def v2_type_filter(
+    filter_string: str = Query(default=..., example="A332"),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+):
+    """
+    Returns aircraft filtered by [aircraft type designator code](https://en.wikipedia.org/wiki/List_of_aircraft_type_designators).
+    """
+    client_ip = x_original_forwarded_for
+    params = [f"find_type={filter_string}"]
+
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    return res
+
+
+@app.get("/v2/reg/{filter_string}", response_class=PrettyJSONResponse)
+async def v2_reg_filter(
+    filter_string: str = Query(default=..., example="G-KELS"),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+):
+    """
+    Returns aircraft filtered by [aircarft registration code](https://en.wikipedia.org/wiki/Aircraft_registration).
+    """
+    client_ip = x_original_forwarded_for
+    params = [f"find_reg={filter_string}"]
+
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    return res
+
+
+@app.get("/v2/hex/{filter_string}", response_class=PrettyJSONResponse)
+async def v2_hex_filter(
+    filter_string: str = Query(default=..., example="4CA87C"),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+):
+    """
+    Returns aircraft filtered by [transponder hex code](https://en.wikipedia.org/wiki/Aviation_transponder_interrogation_modes#ICAO_24-bit_address).
+    """
+    client_ip = x_original_forwarded_for
+    params = [f"find_hex={filter_string}"]
+
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    return res
+
+
+@app.get("/v2/callsign/{filter_string}", response_class=PrettyJSONResponse)
+async def v2_callsign_filter(
+    filter_string: str = Query(default=..., example="JBU1942"),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+):
+    """
+    Returns aircraft filtered by [callsign](https://en.wikipedia.org/wiki/Aviation_call_signs).
+    """
+    client_ip = x_original_forwarded_for
+    params = [f"find_callsign={filter_string}"]
+
+    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
     return res
 
 
@@ -357,6 +452,9 @@ async def v2_point(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ):
+    """
+    Return aircraft located in a circle described by the latitude and longtidude of it's center and it's radius.
+    """
     radius = min(radius, 250)
     client_ip = x_original_forwarded_for
 
