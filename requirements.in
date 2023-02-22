@@ -5,3 +5,5 @@ bcrypt
 pyopenssl
 secrets
 humanize
+fastapi
+uvicorn[standard]
