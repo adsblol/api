@@ -23,13 +23,12 @@ class PrettyJSONResponse(Response):
             sort_keys=True,
         ).encode("utf-8")
 
-
 class V2Response_LastPosition(BaseModel):
-    lat: Optional[float] = None
-    lon: Optional[float] = None
-    nic: Optional[int] = None
-    rc: Optional[int] = None
-    seen_pos: Optional[float] = None
+    lat: float
+    lon: float
+    nic: int
+    rc: int
+    seen_pos: float
 
 
 class V2Response_AcItem(BaseModel):
@@ -42,11 +41,11 @@ class V2Response_AcItem(BaseModel):
     flight: Optional[str] = None
     gs: Optional[float] = None
     gva: Optional[int] = None
-    hex: Optional[str] = None
+    hex: str
     lat: Optional[float] = None
     lon: Optional[float] = None
-    messages: Optional[int] = None
-    mlat: Optional[List[str]] = None
+    messages: int
+    mlat: List[str]
     nac_p: Optional[int] = None
     nac_v: Optional[int] = None
     nav_altitude_mcp: Optional[int] = None
@@ -56,34 +55,33 @@ class V2Response_AcItem(BaseModel):
     nic_baro: Optional[int] = None
     r: Optional[str] = None
     rc: Optional[int] = None
-    rssi: Optional[float] = None
+    rssi: float
     sda: Optional[int] = None
-    seen: Optional[float] = None
+    seen: float
     seen_pos: Optional[float] = None
     sil: Optional[int] = None
     sil_type: Optional[str] = None
     spi: Optional[int] = None
     squawk: Optional[str] = None
     t: Optional[str] = None
-    tisb: Optional[List[str]] = None
+    tisb: List[str]
     track: Optional[float] = None
-    type: Optional[str] = None
+    type: str
     version: Optional[int] = None
     geom_rate: Optional[int] = None
+    dbFlags: Optional[int] = None
+    nav_modes: Optional[List[str]] = None
+    true_heading: Optional[float] = None
     ias: Optional[int] = None
     mach: Optional[float] = None
     mag_heading: Optional[float] = None
-    nav_modes: Optional[List[str]] = None
     oat: Optional[int] = None
     roll: Optional[float] = None
     tas: Optional[int] = None
     tat: Optional[int] = None
     track_rate: Optional[float] = None
-    true_heading: Optional[float] = None
     wd: Optional[int] = None
     ws: Optional[int] = None
-    dbFlags: Optional[int] = None
-    nav_altitude_fms: Optional[int] = None
     gpsOkBefore: Optional[float] = None
     gpsOkLat: Optional[float] = None
     gpsOkLon: Optional[float] = None
@@ -91,12 +89,13 @@ class V2Response_AcItem(BaseModel):
     rr_lat: Optional[float] = None
     rr_lon: Optional[float] = None
     calc_track: Optional[int] = None
+    nav_altitude_fms: Optional[int] = None
 
 
 class V2Response_Model(BaseModel):
-    ac: Optional[List[V2Response_AcItem]] = None
-    ctime: Optional[int] = None
-    msg: Optional[str] = None
+    ac: List[V2Response_AcItem]
+    ctime: int
+    msg: str
     now: int
-    ptime: Optional[int] = None
-    total: Optional[int] = None
+    ptime: int
+    total: int
