@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Header, Query, Path
 
 
-from . import provider
+from .dependencies import provider
 from .models import PrettyJSONResponse, V2Response_Model
 from typing import Any
 

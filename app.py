@@ -11,9 +11,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from utils.models import ApiUuidRequest, PrettyJSONResponse
-from utils.provider import Provider
 from utils.api_v2 import router as v2_router
-
+from utils.dependencies import provider
 description = """
 The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
 
@@ -42,8 +41,6 @@ app.include_router(v2_router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="/app/templates")
 
-
-provider = Provider()
 
 @app.on_event("startup")
 async def startup_event():
@@ -124,7 +121,7 @@ async def metrics():
     return Response(content="\n".join(metrics), media_type="text/plain")
 
 
-@app.get("/api/0/me", response_class=PrettyJSONResponse)
+@app.get("/api/0/me", response_class=PrettyJSONResponse, tags=["v0"])
 async def api_me(
     x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
 ):
