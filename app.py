@@ -14,7 +14,29 @@ from utils.models import ApiUuidRequest, PrettyJSONResponse
 from utils.provider import Provider
 from utils.api_v2 import router as v2_router
 
-app = FastAPI()
+description = """
+The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
+
+## Usage
+You can use the API by sending a GET request to the endpoint you want to use. The API will return a JSON response.
+
+## Terms of Service
+You can use the API for free.
+
+In the future, I might add a rate limit to the API.
+
+In the future, you will require an API key which you can get by feeding to adsb.lol.
+
+If you want to use the API for production purposes, please contact me so I do not break your application by accident.
+"""
+app = FastAPI(
+    title="adsb.lol API",
+    description=description,
+    version="0.0.1",
+    docs_url="/docs",
+    openapi_url="/api/openapi.json",
+    )
+
 app.include_router(v2_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
