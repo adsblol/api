@@ -1,5 +1,6 @@
-import aiohttp
 import re
+
+import aiohttp
 
 
 class ReAPI:
