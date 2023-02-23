@@ -65,9 +65,14 @@ async def v2_ladd(
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
     return res
 
-
 @router.get(
     "/squawk/{squawk}",
+    response_class=PrettyJSONResponse,
+    summary="Aircrafts with specific squawk (1200, 7700, etc.)",
+    description='Returns aircraft filtered by "squawk" [transponder code](https://en.wikipedia.org/wiki/List_of_transponder_codes).',
+)
+@router.get(
+    "/sqk/{squawk}",
     response_class=PrettyJSONResponse,
     summary="Aircrafts with specific squawk (1200, 7700, etc.)",
     description='Returns aircraft filtered by "squawk" [transponder code](https://en.wikipedia.org/wiki/List_of_transponder_codes).',
@@ -106,6 +111,12 @@ async def v2_type_filter(
 
 
 @router.get(
+    "/registration/{registration}",
+    response_class=PrettyJSONResponse,
+    summary="Aircrafts with specific registration (G-KELS)",
+    description="Returns aircraft filtered by [aircarft registration code](https://en.wikipedia.org/wiki/Aircraft_registration).",
+)
+@router.get(
     "/reg/{registration}",
     response_class=PrettyJSONResponse,
     summary="Aircrafts with specific registration (G-KELS)",
@@ -126,6 +137,12 @@ async def v2_reg_filter(
 
 @router.get(
     "/hex/{icao_hex}",
+    response_class=PrettyJSONResponse,
+    summary="Aircrafts with specific transponder hex code (4CA87C)",
+    description="Returns aircraft filtered by [transponder hex code](https://en.wikipedia.org/wiki/Aviation_transponder_interrogation_modes#ICAO_24-bit_address).",
+)
+@router.get(
+    "/icao/{icao_hex}",
     response_class=PrettyJSONResponse,
     summary="Aircrafts with specific transponder hex code (4CA87C)",
     description="Returns aircraft filtered by [transponder hex code](https://en.wikipedia.org/wiki/Aviation_transponder_interrogation_modes#ICAO_24-bit_address).",
@@ -160,9 +177,14 @@ async def v2_callsign_filter(
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
     return res
 
-
 @router.get(
     "/point/{lat}/{lon}/{radius}",
+    response_class=PrettyJSONResponse,
+    summary="Aircrafts surrounding a point (lat, lon) up to 250nm",
+    description="Returns aircraft located in a circle described by the latitude and longtidude of its center and its radius.",
+)
+@router.get(
+    "/lat/{lat}/lon/{lon}/dist/{radius}",
     response_class=PrettyJSONResponse,
     summary="Aircrafts surrounding a point (lat, lon) up to 250nm",
     description="Returns aircraft located in a circle described by the latitude and longtidude of its center and its radius.",
@@ -181,6 +203,7 @@ async def v2_point(
         params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip
     )
     return res
+
 
 @router.get(
     "/all",
