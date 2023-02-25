@@ -44,6 +44,7 @@ The license for the API as well as all data ADSB.lol makes public is [ODbL](http
 
 This is the same license [OpenStreetMap](https://www.openstreetmap.org/copyright), which powers the map on the website, uses.
 """
+
 app = FastAPI(
     title="adsb.lol API",
     description=description,
@@ -101,14 +102,11 @@ async def index(
     Return the index.html page with the client numbers.
     """
     client_ip = x_original_forwarded_for
-    clients_beast = provider.get_clients_per_client_ip(
-        provider.beast_clients, client_ip
-    )
-    clients_mlat = provider.mlat_clients_to_list(provider.mlat_clients, client_ip)
+    clients_beast = provider.get_clients_per_client_ip(client_ip)
+    clients_mlat = provider.mlat_clients_to_list(client_ip)
     context = {
         "clients_beast": clients_beast,
         "clients_mlat": clients_mlat,
-        "own_mlat_clients": len(clients_mlat),
         "ip": client_ip,
         "len_beast": len(provider.beast_clients),
         "len_mlat": len(provider.mlat_clients),
@@ -168,9 +166,7 @@ async def api_me(
     x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
 ):
     client_ip = x_original_forwarded_for
-    beast_clients_set = provider.get_clients_per_client_ip(
-        provider.beast_clients, client_ip
-    )
+    beast_clients_set = provider.get_clients_per_client_ip(client_ip)
     beast_clients_list = []
     for client in beast_clients_set:
         beast_clients_list.append(
@@ -184,7 +180,7 @@ async def api_me(
                 "positions_per_second": client[5],
             }
         )
-    mlat_clients = provider.mlat_clients_to_list(provider.mlat_clients, client_ip)
+    mlat_clients = provider.mlat_clients_to_list(client_ip)
     response = {
         "feeding": {
             "beast": len(beast_clients_list) > 0,

@@ -117,15 +117,19 @@ class Provider(object):
             )
         return clients_set
 
-    @staticmethod
-    def mlat_clients_to_list(clients, ip=None):
+    def mlat_clients_to_list(self, ip=None):
+        """
+        Return mlat clients with specified ip.
+        """
         clients_list = []
         keys_to_copy = "user privacy connection peer_count bad_sync_timeout outlier_percent".split()
-        for name, client in clients.items():
+
+        for name, client in self.mlat_clients.items():
             if ip is not None and client["source_ip"] == ip:
                 clients_list.append(
                     {key: client[key] for key in keys_to_copy if key in client}
                 )
+
         return clients_list
 
     def anonymize_mlat_data(self, data):
@@ -143,9 +147,14 @@ class Provider(object):
 
         return sanitized_data
 
-    @staticmethod
-    def get_clients_per_client_ip(clients, ip: str) -> list:
-        return [client for client in clients if client[1] == ip]
+    def get_clients_per_client_ip(self, ip: str) -> list:
+        """
+        Return Beast clients with specified ip.
+        """
+        if ip is not None:
+            return [client for client in self.beast_clients if client[1] == ip]
+        else:
+            return []
 
     @lru_cache(maxsize=1024)
     def cachehash(self, name):
