@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from utils.models import ApiUuidRequest, PrettyJSONResponse
 from utils.api_v2 import router as v2_router
 from utils.dependencies import provider
+
 description = """
 The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
 
@@ -27,6 +28,12 @@ In the future, I might add a rate limit to the API.
 In the future, you will require an API key which you can get by feeding to adsb.lol.
 
 If you want to use the API for production purposes, please contact me so I do not break your application by accident.
+
+## License
+
+The license for the API as well as all data ADSB.lol makes public is [ODbL](https://opendatacommons.org/licenses/odbl/summary/).
+
+This is the same license [OpenStreetMap](https://www.openstreetmap.org/copyright), which powers the map on the website, uses.
 """
 app = FastAPI(
     title="adsb.lol API",
@@ -34,7 +41,11 @@ app = FastAPI(
     version="0.0.1",
     docs_url="/docs",
     openapi_url="/api/openapi.json",
-    )
+    license_info={
+        "name": "Open Data Commons Open Database License (ODbL) v1.0",
+        "url": "https://opendatacommons.org/licenses/odbl/1-0/",
+    },
+)
 
 app.include_router(v2_router)
 
@@ -156,7 +167,6 @@ async def api_me(
     }
 
     return response
-
 
 
 if __name__ == "__main__":
