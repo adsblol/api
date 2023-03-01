@@ -168,8 +168,8 @@
             <li>MLAT: <code>feed.adsb.lol</code> port <code>1338</code> or port <code>31090</code>
             <li>
                 <p><b>To start feeding</b>, see <a href="https://github.com/adsblol/feed">the adsb.lol feed client</a>.
-                 
-              
+
+
         </ul>
 
         {% set own_beast = clients_beast|length %}
@@ -198,6 +198,12 @@
                     <th>Positions/s</th>
                     {% for client in clients_beast %}
                 <tr>
+                    <!--- If client[0] ends with 000000000000, show a warning! The UUID has not been set. -->
+                    {% if client[0] | endswith("000000000000") %}
+                    <td style="color: red">NO UUID! Please run <code>adsblol-update && adsblol-up</code><br/>or set one in your existing client.</td>
+                    {% else %}
+                    <td>{{ client[0] }}</td>
+                    {% endif %}
                     <td>{{ client[0] }}</td>
                     <td>{{ client[1] }}</td>
                     <td>{{ client[2] }}</td>
