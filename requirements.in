@@ -7,3 +7,4 @@ secrets
 humanize
 fastapi
 uvicorn[standard]
+pytest-asyncio

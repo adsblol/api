@@ -19,7 +19,9 @@ anyio==3.6.2
 async-timeout==4.0.2
     # via aiohttp
 attrs==22.2.0
-    # via aiohttp
+    # via
+    #   aiohttp
+    #   pytest
 bcrypt==4.0.1
     # via -r requirements.in
 cffi==1.15.1
@@ -52,6 +54,8 @@ idna==3.4
     # via
     #   anyio
     #   yarl
+iniconfig==2.0.0
+    # via pytest
 jinja2==3.1.2
     # via
     #   -r requirements.in
@@ -62,6 +66,10 @@ multidict==6.0.4
     # via
     #   aiohttp
     #   yarl
+packaging==23.0
+    # via pytest
+pluggy==1.0.0
+    # via pytest
 pyasn1==0.4.8
     # via
     #   pyasn1-modules
@@ -74,7 +82,11 @@ pydantic==1.10.5
     # via fastapi
 pyopenssl==23.0.0
     # via -r requirements.in
-python-dotenv==0.21.1
+pytest==7.2.1
+    # via pytest-asyncio
+pytest-asyncio==0.20.3
+    # via -r requirements.in
+python-dotenv==1.0.0
     # via uvicorn
 python-gnupg==0.5.0
     # via secrets
