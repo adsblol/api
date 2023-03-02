@@ -154,6 +154,7 @@
         <h3>
             <a href="https://globe.adsb.lol/">Globe (Map)</a> &#12316;
             <a href="https://adsb.lol/stats">Statistics</a> &#12316;
+            <a href="https://matrix.to/#/#adsblol:gatto.club">Matrix</a> &#12316;
             <a href="https://adsb.lol/discord">Discord</a> &#12316;
             <a href="https://api.adsb.lol">API</a> &#12316;
             <a href="https://map.adsb.lol">MLAT Feeder Map</a>
@@ -199,7 +200,7 @@
                     {% for client in clients_beast %}
                 <tr>
                     <!--- If client[0] ends with 000000000000, show a warning! The UUID has not been set. -->
-                    {% if client[0] | endswith("000000000000") %}
+                    {% if client[0].endswith("000000000000") %}
                     <td style="color: red">NO UUID! Please run <code>adsblol-update && adsblol-up</code><br/>or set one in your existing client.</td>
                     {% else %}
                     <td>{{ client[0] }}</td>
