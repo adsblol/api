@@ -87,6 +87,19 @@
             background: red;
             border: 1px solid black;
         }
+
+        /* From https://www.w3schools.com/css/css_tooltip.asp */
+
+        /* Tooltip text */
+        .tooltip .tooltiptext {
+            visibility: hidden;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            height: auto;
+        }
+
     </style>
 </head>
 
@@ -149,7 +162,8 @@
             <a href="https://github.com/adsblol/api">code</a>
             and
             <a href="https://github.com/adsblol/infra">configuration</a>
-            used to deploy the entirety of this service from scratch.</p>
+            used to deploy the entirety of this service from scratch.
+        </p>
         <p>
         <h3>
             <a href="https://globe.adsb.lol/">Globe (Map)</a> &#12316;
@@ -188,7 +202,7 @@
         {% if own_beast > 0 %}
         <h3>Feeding from the following clients:</h2>
             <!--- Make a table, columns: HEX, IP, KBPS, CONN_TIME, MSG_S, POSITION_S, REDUCE_SIGNAL, POSITIONS -->
-            <table>
+            <table class="tooltip">
                 <tr>
                     <th>ID</th>
                     <th>IP</th>
@@ -201,11 +215,12 @@
                 <tr>
                     <!--- If client[0] ends with 000000000000, show a warning! The UUID has not been set. -->
                     {% if client[0].endswith("000000000000") %}
-                    <td style="color: red">NO UUID! Please run <code>adsblol-update && adsblol-up</code><br/>or set one in your existing client.</td>
+                    <td style="color: red">NO UUID! Please run <code>adsblol-update && adsblol-up</code><br />or set one
+                        in your existing client.</td>
                     {% else %}
-                    <td>{{ client[0] }}</td>
+                    <td class="tooltiptext">{{ client[0] }}</td>
                     {% endif %}
-                    <td>{{ client[1] }}</td>
+                    <td class="tooltiptext">{{ client[1] }}</td>
                     <td>{{ client[2] }}</td>
                     <td>{{ client[3] }}</td>
                     <td>{{ client[7] }}</td>
@@ -220,15 +235,15 @@
     </div>
 
     <div class="map" id="map"></div>
-    <br/><br/>
+    <br /><br />
     <p>Made with &#10084;&#65039; by <a href="https://github.com/katlol">Katia</a></p>
-    <br/><br/>
+    <br /><br />
 </body>
 
 <script>
     // Custom icons
-    const redIcon = L.divIcon({className: "red-icon", iconSize: new L.Point(8, 8)})
-    const greenIcon = L.divIcon({className: "green-icon", iconSize: new L.Point(8, 8)})
+    const redIcon = L.divIcon({ className: "red-icon", iconSize: new L.Point(8, 8) })
+    const greenIcon = L.divIcon({ className: "green-icon", iconSize: new L.Point(8, 8) })
 
     // Icon layers
     const adsb = L.layerGroup()
@@ -257,7 +272,7 @@
         .then(response => response.json())
         .then(data => {
             data.forEach(receiver => {
-                L.marker([receiver[0], receiver[1]], {icon: redIcon}).addTo(adsb);
+                L.marker([receiver[0], receiver[1]], { icon: redIcon }).addTo(adsb);
             });
         });
 
@@ -267,10 +282,10 @@
         .then(data => {
             Object.entries(data).forEach(([name, receiver]) => {
                 if (receiver.lat && receiver.lon) {
-                    L.marker([receiver.lat, receiver.lon], {icon: greenIcon}).bindTooltip(
+                    L.marker([receiver.lat, receiver.lon], { icon: greenIcon }).bindTooltip(
                         `<b>${name}</b><br>Peers: ${Object.keys(receiver.peers).length}`, {
-                            'direction': 'top'
-                        }
+                        'direction': 'top'
+                    }
                     ).addTo(mlat)
                 }
             });
