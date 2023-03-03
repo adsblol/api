@@ -189,14 +189,15 @@
 
         {% set own_beast = clients_beast|length %}
         {% set own_mlat = clients_mlat|length %}
-
-        {% set own_string = "You are not feeding ADSB or MLAT" %}
+        {% set own_beast_clients = own_beast ~ " client" ~ (own_beast != 1 ? "s" : "") %}
+        {% set own_mlat_clients = own_mlat ~ " client" ~ (own_mlat != 1 ? "s" : "") %}
+        {% set own_string = "You are not feeding" %}
         {% if own_beast > 0 and own_mlat > 0 %}
-        {% set own_string = "You are feeding ADSB (" ~ own_beast ~ " clients) and MLAT (" ~ own_mlat ~ " clients)" %}
+        {% set own_string = "You are feeding BEAST (" ~ own_beast_clients ~ ") and MLAT (" ~ own_mlat_clients ~ ")" %}
         {% elif own_beast > 0 %}
-        {% set own_string = "You are feeding ADSB (" ~ own_beast ~ " clients)" %}
+        {% set own_string = "You are feeding BEAST (" ~ own_beast_cients ~ ")" %}
         {% elif own_mlat > 0 %}
-        {% set own_string = "You are feeding MLAT (" ~ own_mlat ~ " clients)" %}
+        {% set own_string = "You are feeding MLAT (" ~ own_mlat_cients ~ ")" %}
         {% endif %}
         <h3 style="color: #bbffff">{{ own_string }}</h3>
         {% if own_beast > 0 %}
