@@ -194,8 +194,8 @@
 
         {% set own_beast = clients_beast|length %}
         {% set own_mlat = clients_mlat|length %}
-        {% set own_beast_clients = own_beast ~ " client" ~ (own_beast != 1 ? "s" : "") %}
-        {% set own_mlat_clients = own_mlat ~ " client" ~ (own_mlat != 1 ? "s" : "") %}
+        {% set own_beast_clients = own_beast ~ " client" ~ ("s" if own_beast != 1 else "") %}
+        {% set own_mlat_clients = own_mlat ~ " client" ~ ("s" if own_mlat != 1 else "") %}
         {% set own_string = "You are not feeding" %}
         {% if own_beast > 0 and own_mlat > 0 %}
         {% set own_string = "You are feeding BEAST (" ~ own_beast_clients ~ ") and MLAT (" ~ own_mlat_clients ~ ")" %}
