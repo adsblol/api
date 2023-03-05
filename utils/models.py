@@ -16,11 +16,7 @@ class PrettyJSONResponse(Response):
     def render(self, content: typing.Any) -> bytes:
         return orjson.dumps(
             content,
-            ensure_ascii=False,
-            allow_nan=False,
-            indent=2,
-            separators=(",", ":"),
-            sort_keys=True,
+            option=orjson.OPT_SORT_KEYS | orjson.OPT_INDENT_2,
         ).encode("utf-8")
 
 class V2Response_LastPosition(BaseModel):
