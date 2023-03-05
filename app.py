@@ -1,4 +1,4 @@
-import json
+import ujson
 import typing
 import uuid
 from datetime import datetime
@@ -121,7 +121,7 @@ async def mlat_totalcount_json():
 @app.post("/api/0/uuid", response_class=PrettyJSONResponse, include_in_schema=False)
 async def post_uuid(data: ApiUuidRequest):
     generated_uuid = str(uuid.uuid4())
-    json_log = json.dumps({"uuid": generated_uuid, "data": data.dict()})
+    json_log = ujson.dumps({"uuid": generated_uuid, "data": data.dict()})
     print(json_log)
     return {"uuid": generated_uuid}
 

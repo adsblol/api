@@ -1,4 +1,4 @@
-import json
+import ujson
 import typing
 
 from fastapi.responses import Response
@@ -14,7 +14,7 @@ class PrettyJSONResponse(Response):
     media_type = "application/json"
 
     def render(self, content: typing.Any) -> bytes:
-        return json.dumps(
+        return ujson.dumps(
             content,
             ensure_ascii=False,
             allow_nan=False,

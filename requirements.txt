@@ -126,6 +126,8 @@ tomli==2.0.1
     # via pytest
 typing-extensions==4.5.0
     # via pydantic
+ujson==5.7.0
+    # via -r requirements.in
 uvicorn[standard]==0.20.0
     # via
     #   -r requirements.in
