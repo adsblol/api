@@ -74,6 +74,8 @@ multidict==6.0.4
     # via
     #   aiohttp
     #   yarl
+orjson==3.8.7
+    # via -r requirements.in
 packaging==23.0
     # via pytest
 pendulum==2.1.2
@@ -126,8 +128,6 @@ tomli==2.0.1
     # via pytest
 typing-extensions==4.5.0
     # via pydantic
-ujson==5.7.0
-    # via -r requirements.in
 uvicorn[standard]==0.20.0
     # via
     #   -r requirements.in
