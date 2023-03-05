@@ -3,7 +3,7 @@ FROM python:3.12.0a5-slim
 WORKDIR /app
 COPY ./requirements.txt /app
 # "Installing this module requires OpenSSL python bindings"
-RUN BUILD_DEPS="libssl-dev cargo gcc" && \
+RUN BUILD_DEPS="libssl-dev cargo gcc libffi-dev" && \
     apt-get update && apt-get install -y $BUILD_DEPS && \
     PYOPENSSL=$(grep 'pyopenssl=' requirements.txt) && \
     pip install --no-cache-dir $PYOPENSSL && \
