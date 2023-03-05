@@ -3,7 +3,6 @@ jinja2
 aiohttp_jinja2
 bcrypt
 pyopenssl
-secrets
 humanize
 fastapi
 uvicorn[standard]

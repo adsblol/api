@@ -32,10 +32,6 @@ charset-normalizer==3.0.1
     # via aiohttp
 click==8.1.3
     # via uvicorn
-configobj==5.0.8
-    # via
-    #   secrets
-    #   systematic
 cryptography==39.0.2
     # via pyopenssl
 exceptiongroup==1.1.0
@@ -50,8 +46,6 @@ frozenlist==1.3.3
     # via
     #   aiohttp
     #   aiosignal
-future==0.18.3
-    # via systematic
 h11==0.14.0
     # via uvicorn
 httptools==0.5.0
@@ -82,12 +76,6 @@ pendulum==2.1.2
     # via fastapi-cache2
 pluggy==1.0.0
     # via pytest
-pyasn1==0.4.8
-    # via
-    #   pyasn1-modules
-    #   python-ldap
-pyasn1-modules==0.2.8
-    # via python-ldap
 pycparser==2.21
     # via cffi
 pydantic==1.10.5
@@ -102,28 +90,18 @@ python-dateutil==2.8.2
     # via pendulum
 python-dotenv==1.0.0
     # via uvicorn
-python-gnupg==0.5.0
-    # via secrets
-python-ldap==3.4.3
-    # via secrets
 pytzdata==2020.1
     # via pendulum
 pyyaml==6.0
     # via uvicorn
 redis==4.5.1
     # via fastapi-cache2
-secrets==1.0.2
-    # via -r requirements.in
 six==1.16.0
-    # via
-    #   configobj
-    #   python-dateutil
+    # via python-dateutil
 sniffio==1.3.0
     # via anyio
 starlette==0.25.0
     # via fastapi
-systematic==4.8.7
-    # via secrets
 tomli==2.0.1
     # via pytest
 typing-extensions==4.5.0
