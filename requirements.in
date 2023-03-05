@@ -8,3 +8,4 @@ humanize
 fastapi
 uvicorn[standard]
 pytest-asyncio
+fastapi-cache2[redis]

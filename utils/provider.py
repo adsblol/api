@@ -9,6 +9,7 @@ import aiohttp
 import bcrypt
 
 from .reapi import ReAPI
+from .settings import REAPI_ENDPOINT
 
 
 class Provider(object):
@@ -18,7 +19,7 @@ class Provider(object):
         self.mlat_sync_json = {}
         self.mlat_totalcount_json = {}
         self.mlat_clients = {}
-        self.ReAPI = ReAPI("http://reapi-readsb:30152/re-api/")
+        self.ReAPI = ReAPI(REAPI_ENDPOINT)
 
     async def startup(self):
         self.client_session = aiohttp.ClientSession(

@@ -8,11 +8,16 @@ from fastapi import FastAPI, Header, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
 from pydantic import BaseModel
+from redis import asyncio as aioredis
 
-from utils.models import ApiUuidRequest, PrettyJSONResponse
+from utils.settings import REDIS_HOST
 from utils.api_v2 import router as v2_router
 from utils.dependencies import provider
+from utils.models import ApiUuidRequest, PrettyJSONResponse
 
 description = """
 The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
@@ -56,6 +61,8 @@ templates = Jinja2Templates(directory="/app/templates")
 @app.on_event("startup")
 async def startup_event():
     await provider.startup()
+    redis = aioredis.from_url(REDIS_HOST, encoding="utf8", decode_responses=True)
+    FastAPICache.init(RedisBackend(redis), prefix="api")
 
 
 @app.on_event("shutdown")
