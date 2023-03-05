@@ -1,10 +1,11 @@
 from typing import Any
 
 from fastapi import APIRouter, Header, Path, Query
+from fastapi.responses import ORJSONResponse
 from fastapi_cache.decorator import cache
 from .settings import REDIS_TTL
 from .dependencies import provider
-from .models import PrettyJSONResponse, V2Response_Model
+from .models import ORJSONResponse, V2Response_Model
 
 router = APIRouter(
     prefix="/v2",
@@ -15,7 +16,7 @@ router = APIRouter(
 
 @router.get(
     "/pia",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with PIA addresses (Privacy ICAO Address)",
     description="Returns all aircraft with [PIA](https://nbaa.org/aircraft-operations/security/privacy/privacy-icao-address-pia/) addresses.",
 )
@@ -34,7 +35,7 @@ async def v2_pia(
 
 @router.get(
     "/mil",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Military registered aircrafts",
     description="Returns all military registered aircraft.",
 )
@@ -53,7 +54,7 @@ async def v2_mil(
 
 @router.get(
     "/ladd",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts on LADD (Limiting Aircraft Data Displayed)",
     description="Returns all aircrafts on [LADD](https://www.faa.gov/pilots/ladd) filter.",
 )
@@ -71,13 +72,13 @@ async def v2_ladd(
 
 @router.get(
     "/squawk/{squawk}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with specific squawk (1200, 7700, etc.)",
     description='Returns aircraft filtered by "squawk" [transponder code](https://en.wikipedia.org/wiki/List_of_transponder_codes).',
 )
 @router.get(
     "/sqk/{squawk}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with specific squawk (1200, 7700, etc.)",
     description='Returns aircraft filtered by "squawk" [transponder code](https://en.wikipedia.org/wiki/List_of_transponder_codes).',
 )
@@ -98,7 +99,7 @@ async def v2_squawk_filter(
 
 @router.get(
     "/type/{aircraft_type}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts of specific type (A320, B738)",
     description="Returns aircraft filtered by [aircraft type designator code](https://en.wikipedia.org/wiki/List_of_aircraft_type_designators).",
 )
@@ -118,13 +119,13 @@ async def v2_type_filter(
 
 @router.get(
     "/registration/{registration}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with specific registration (G-KELS)",
     description="Returns aircraft filtered by [aircarft registration code](https://en.wikipedia.org/wiki/Aircraft_registration).",
 )
 @router.get(
     "/reg/{registration}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with specific registration (G-KELS)",
     description="Returns aircraft filtered by [aircarft registration code](https://en.wikipedia.org/wiki/Aircraft_registration).",
 )
@@ -144,13 +145,13 @@ async def v2_reg_filter(
 
 @router.get(
     "/hex/{icao_hex}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with specific transponder hex code (4CA87C)",
     description="Returns aircraft filtered by [transponder hex code](https://en.wikipedia.org/wiki/Aviation_transponder_interrogation_modes#ICAO_24-bit_address).",
 )
 @router.get(
     "/icao/{icao_hex}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with specific transponder hex code (4CA87C)",
     description="Returns aircraft filtered by [transponder hex code](https://en.wikipedia.org/wiki/Aviation_transponder_interrogation_modes#ICAO_24-bit_address).",
 )
@@ -170,7 +171,7 @@ async def v2_hex_filter(
 
 @router.get(
     "/callsign/{callsign}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts with specific callsign (JBU1942)",
     description="Returns aircraft filtered by [callsign](https://en.wikipedia.org/wiki/Aviation_call_signs).",
 )
@@ -188,13 +189,13 @@ async def v2_callsign_filter(
 
 @router.get(
     "/point/{lat}/{lon}/{radius}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts surrounding a point (lat, lon) up to 250nm",
     description="Returns aircraft located in a circle described by the latitude and longtidude of its center and its radius.",
 )
 @router.get(
     "/lat/{lat}/lon/{lon}/dist/{radius}",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="Aircrafts surrounding a point (lat, lon) up to 250nm",
     description="Returns aircraft located in a circle described by the latitude and longtidude of its center and its radius.",
 )
@@ -217,7 +218,7 @@ async def v2_point(
 
 @router.get(
     "/all",
-    response_class=PrettyJSONResponse,
+    response_class=ORJSONResponse,
     summary="All aircrafts",
     description="Returns all [aircraft](https://en.wikipedia.org/wiki/Aircraft).",
 )
