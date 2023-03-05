@@ -5,7 +5,7 @@ from fastapi.responses import ORJSONResponse
 from fastapi_cache.decorator import cache
 from .settings import REDIS_TTL
 from .dependencies import provider
-from .models import ORJSONResponse, V2Response_Model
+from .models import PrettyJSONResponse, V2Response_Model
 
 router = APIRouter(
     prefix="/v2",
