@@ -70,7 +70,7 @@ def docs_override():
     return get_swagger_ui_html(
         openapi_url="/api/openapi.json",
         title="adsb.lol API",
-        swagger_favicon_url="https://placekitten.com/200/300",
+        swagger_favicon_url="/favicon.ico",
     )
 
 
