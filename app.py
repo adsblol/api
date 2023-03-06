@@ -1,11 +1,12 @@
-import orjson
 import typing
 import uuid
 from datetime import datetime
 
+import orjson
 from aiohttp import web
 from fastapi import FastAPI, Header, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi_cache import FastAPICache
@@ -14,10 +15,10 @@ from fastapi_cache.decorator import cache
 from pydantic import BaseModel
 from redis import asyncio as aioredis
 
-from utils.settings import REDIS_HOST
 from utils.api_v2 import router as v2_router
 from utils.dependencies import provider
 from utils.models import ApiUuidRequest, PrettyJSONResponse
+from utils.settings import REDIS_HOST
 
 description = """
 The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
@@ -44,7 +45,8 @@ app = FastAPI(
     title="adsb.lol API",
     description=description,
     version="0.0.1",
-    docs_url="/docs",
+    docs_url=None,
+    redoc_url=None,
     openapi_url="/api/openapi.json",
     license_info={
         "name": "Open Data Commons Open Database License (ODbL) v1.0",
@@ -56,6 +58,20 @@ app.include_router(v2_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="/app/templates")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse("static/favicon.ico")
+
+
+@app.get("/docs", include_in_schema=False)
+def docs_override():
+    return get_swagger_ui_html(
+        openapi_url="/api/openapi.json",
+        title="adsb.lol API",
+        swagger_favicon_url="https://placekitten.com/200/300",
+    )
 
 
 @app.on_event("startup")
@@ -179,3 +195,5 @@ async def api_me(
 if __name__ == "__main__":
     print("Run with:")
     print("uvicorn app:app --host 0.0.0.0 --port 80")
+    print("or for development:")
+    print("uvicorn app:app --host 0.0.0.0 --port 80 --reload")
