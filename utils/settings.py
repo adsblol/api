@@ -6,4 +6,4 @@ REDIS_TTL = int(os.getenv("ADSBLOL_REDIS_TTL", "5"))
 REAPI_ENDPOINT = os.getenv(
     "ADSBLOL_REAPI_ENDPOINT", "http://reapi-readsb:30152/re-api/"
 )
-ADSBLOL_HUB_HTTP = os.getenv("ADSBLOL_HUB_HTTP", "http:://hub-readsb:150")
+STATS_URL = os.getenv("ADSBLOL_STATS_URL", "http://hub-readsb:150/stats.json")
