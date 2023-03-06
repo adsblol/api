@@ -8,7 +8,7 @@ import aiohttp
 import bcrypt
 
 from .reapi import ReAPI
-from .settings import REAPI_ENDPOINT, ADSBLOL_HUB_HTTP
+from .settings import REAPI_ENDPOINT, STATS_URL
 
 
 class Provider(object):
@@ -37,10 +37,8 @@ class Provider(object):
             while True:
                 try:
                     # global update
-                    print("Fetching data from", ADSBLOL_HUB_HTTP)
-                    async with self.client_session.get(
-                        f"{ADSBLOL_HUB_HTTP}/data/stats.json"
-                    ) as resp:
+                    print("Fetching data from", STATS_URL)
+                    async with self.client_session.get(STATS_URL) as resp:
                         data = await resp.json()
                     self.aircraft_totalcount = data["aircraft_with_pos"]
 
