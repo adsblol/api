@@ -8,7 +8,7 @@ import aiohttp
 import bcrypt
 
 from .reapi import ReAPI
-from .settings import REAPI_ENDPOINT
+from .settings import REAPI_ENDPOINT, ADSBLOL_HUB_HTTP
 
 
 class Provider(object):
@@ -18,6 +18,7 @@ class Provider(object):
         self.mlat_sync_json = {}
         self.mlat_totalcount_json = {}
         self.mlat_clients = {}
+        self.aircraft_totalcount = 0
         self.ReAPI = ReAPI(REAPI_ENDPOINT)
 
     async def startup(self):
@@ -35,6 +36,14 @@ class Provider(object):
         try:
             while True:
                 try:
+                    # global update
+                    print("Fetching data from", ADSBLOL_HUB_HTTP)
+                    async with self.client_session.get(
+                        f"{ADSBLOL_HUB_HTTP}/data/stats.json"
+                    ) as resp:
+                        data = await resp.json()
+                    self.aircraft_totalcount = data["aircraft_with_pos"]
+
                     # clients update
                     ips = ["ingest-readsb:150"]
                     print("Fetching data from", ips)
@@ -80,7 +89,7 @@ class Provider(object):
                     ) as resp:
                         data = await resp.json()
                     self.mlat_clients = data
-
+                    
                     print("Looped..")
                     await asyncio.sleep(1)
                 except Exception as e:

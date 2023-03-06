@@ -151,6 +151,7 @@ async def metrics():
         "adsb_api_beast_total_receivers {}".format(len(provider.beast_receivers)),
         "adsb_api_beast_total_clients {}".format(len(provider.beast_clients)),
         "adsb_api_mlat_total {}".format(len(provider.mlat_sync_json)),
+        "adsb_api_aircraft_total {}".format(provider.aircraft_totalcount),
     ]
     return Response(content="\n".join(metrics), media_type="text/plain")
 
@@ -187,6 +188,11 @@ async def api_me(
             "mlat": mlat_clients,
         },
         "client_ip": client_ip,
+        "global": {
+            "beast": len(provider.beast_clients),
+            "mlat": len(provider.mlat_clients),
+            "planes": provider.aircraft_totalcount,
+        },
     }
 
     return response
