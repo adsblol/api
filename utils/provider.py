@@ -3,6 +3,7 @@ import traceback
 import uuid
 from datetime import datetime
 from functools import lru_cache
+from collections import namedtuple
 
 import aiohttp
 import bcrypt
@@ -13,13 +14,13 @@ from .settings import REAPI_ENDPOINT, ADSBLOL_HUB_HTTP
 
 class Provider(object):
     def __init__(self):
-        self.beast_clients = set()
+        self.beast_clients = list()
         self.beast_receivers = []
         self.mlat_sync_json = {}
         self.mlat_totalcount_json = {}
-        self.mlat_clients = {}
+        self.mlat_clients = list()
         self.aircraft_totalcount = 0
-        self.ReAPI = ReAPI(REAPI_ENDPOINT)
+        self.ReAPI = ReAPI("http://reapi-readsb:30152/re-api/")
 
     async def startup(self):
         self.client_session = aiohttp.ClientSession(
@@ -49,6 +50,8 @@ class Provider(object):
                     print("Fetching data from", ips)
                     clients = []
                     receivers = []
+
+                    # beast update
                     for ip in ips:
                         async with self.client_session.get(
                             f"http://{ip}/clients.json"
@@ -66,7 +69,7 @@ class Provider(object):
                                 receivers.append([lat, lon])
                     print(len(receivers), "receivers")
 
-                    self.beast_clients = self.beast_clients_to_set(clients)
+                    self.set_beast_clients(clients)
                     self.beast_receivers = receivers
 
                     # mlat update
@@ -99,23 +102,26 @@ class Provider(object):
         except asyncio.CancelledError:
             print("Background task cancelled")
 
-    @staticmethod
-    def beast_clients_to_set(clients):
-        clients_set = set()
-        for client in clients:
-            hex = client[0]
-            ip = client[1].split()[1]
-            kbps = client[2]
-            conn_time = client[3]
-            msg_s = client[4]
-            position_s = client[5]
-            reduce_signal = client[6]
-            positions = client[8]
+    def set_beast_clients(self, client_rows):
+        """Deduplicating setter."""
+        clients = {}
 
-            clients_set.add(
-                (hex, ip, kbps, conn_time, msg_s, position_s, reduce_signal, positions)
-            )
-        return clients_set
+        for client in clients:
+            client = {
+                "hex": client[0],
+                "ip": client[1].split()[1],
+                "kbps": client[2],
+                "conn_time": client[3],
+                "msg_s": client[4],
+                "position_s": client[5],
+                "reduce_signal": client[6],
+                "positions": client[8],
+                "type": "beast",
+            }
+
+        # deduplicate by hex and ip
+        clients = {(c["hex"], c["ip"]): c for c in deduplicated_clients}.values()
+        self.beast_clients = clients
 
     def mlat_clients_to_list(self, ip=None):
         """
@@ -152,10 +158,7 @@ class Provider(object):
         """
         Return Beast clients with specified ip.
         """
-        if ip is not None:
-            return [client for client in self.beast_clients if client[1] == ip]
-        else:
-            return []
+        return [client for client in self.beast_clients if client["ip"] == ip]
 
     @lru_cache(maxsize=1024)
     def cachehash(self, name):

@@ -109,28 +109,6 @@ async def index(
     return response
 
 
-@app.get("/feed_info", response_class=PrettyJSONResponse, include_in_schema=False)
-async def feed_info(
-    request: Request, x_original_forwarded_for: str | None = Header(default=None)
-):
-    """
-    Return feed info with the client numbers.
-    """
-    client_ip = x_original_forwarded_for
-    clients_beast = provider.get_clients_per_client_ip(client_ip)
-    clients_mlat = provider.mlat_clients_to_list(client_ip)
-    context = {
-        "clients_beast": clients_beast,
-        "clients_mlat": clients_mlat,
-        "own_mlat_clients": len(clients_mlat),
-        "ip": client_ip,
-        "len_beast": len(provider.beast_clients),
-        "len_mlat": len(provider.mlat_clients),
-    }
-
-    return context
-
-
 @app.get("/api/0/receivers", response_class=PrettyJSONResponse, include_in_schema=False)
 async def receivers():
     return provider.beast_receivers
@@ -181,20 +159,7 @@ async def api_me(
     x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
 ):
     client_ip = x_original_forwarded_for
-    beast_clients_set = provider.get_clients_per_client_ip(client_ip)
-    beast_clients_list = []
-    for client in beast_clients_set:
-        beast_clients_list.append(
-            {
-                "type": "beast",
-                "hex": client[0],
-                "kbps": client[2],
-                "connected_seconds": client[3],
-                "positions": client[7],
-                "messages_per_second": client[4],
-                "positions_per_second": client[5],
-            }
-        )
+    my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     mlat_clients = provider.mlat_clients_to_list(client_ip)
     response = {
         "feeding": {
@@ -202,7 +167,7 @@ async def api_me(
             "mlat": len(mlat_clients) > 0,
         },
         "clients": {
-            "beast": beast_clients_list,
+            "beast": my_beast_clients,
             "mlat": mlat_clients,
         },
         "client_ip": client_ip,
@@ -211,6 +176,43 @@ async def api_me(
             "mlat": len(provider.mlat_clients),
             "planes": provider.aircraft_totalcount,
         },
+    }
+
+    return response
+
+
+@app.get(
+    "/api/0/server_info",
+    response_class=PrettyJSONResponse,
+    include_in_schema=True,
+    tags=["v0"],
+)
+async def server_info(
+    request: Request, x_original_forwarded_for: str | None = Header(default=None)
+):
+    """
+    Return feed info with the client numbers.
+    """
+
+    # Only the client has access to their own information
+    client_ip = x_original_forwarded_for
+    you_clients_beast = provider.get_clients_per_client_ip(client_ip)
+    you_clients_mlat = provider.mlat_clients_to_list(client_ip)
+    you = {
+        "ip": client_ip,
+        "clients_beast": clients_beast,
+        "clients_mlat": clients_mlat,
+    }
+
+    server = {
+        "clients_beast": len(provider.beast_clients),
+        "clients_mlat": len(provider.mlat_clients),
+        "receivers_beast": len(provider.beast_receivers),
+    }
+
+    response = {
+        "you": you,
+        "server": server,
     }
 
     return response
