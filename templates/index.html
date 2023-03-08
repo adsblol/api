@@ -164,12 +164,13 @@
             <a href="https://github.com/adsblol/infra">configuration</a>
             used to deploy the entirety of this service from scratch.
         </p>
-        <p>Data is available freely (
-            <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL</a>
-            ) through the API. This is to discourage profit incentives.
-        Running the entirety of adsb.lol cost €123 in infrastructure (
-            <a href="https://www.hetzner.com/cloud">Hetzner Cloud</a>
-            ) for the month of February.</p>
+        <p>By feeding adsb.lol, you agree, to the extent possible under law, to waive all copyright and related or neighboring rights to the data you are sharing, under the
+            <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a> license.</p>
+        <p>Data is freely available
+            (licensed <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL</a>)
+            from the <a href="https://api.adsb.lol">API</a>
+            as well as historical data on GitHub.
+        </p>
         <h3>
             <a href="https://globe.adsb.lol/">Globe (Map)</a> &#12316;
             <a href="https://adsb.lol/stats">Statistics</a> &#12316;
@@ -178,19 +179,14 @@
             <a href="https://api.adsb.lol">API</a> &#12316;
             <a href="https://map.adsb.lol">MLAT Feeder Map</a>
         </h3>
-
         <h2>Feed Information</h2>
-        <h3>Check from terminal with <code>curl https://api.adsb.lol/api/0/me</code></h3>
+        <h3><code>curl https://api.adsb.lol/api/0/me</code></h3>
+
         <ul>
-            <li>BEAST: <code>feed.adsb.lol</code> port <code>1337</code> or <code>30004</code>,
-                <code>30005</code>
-            </li>
-            <li>MLAT: <code>feed.adsb.lol</code> port <code>1338</code> or port <code>31090</code>
-            <li>
-                <p><b>To start feeding</b>, see <a href="https://github.com/adsblol/feed">the adsb.lol feed client</a>.
-
-
+            <li><b>BEAST</b>: <code>feed.adsb.lol</code> port <code>1337</code> or <code>30004</code>, <code>30005</code></li>
+            <li><b>MLAT</b>: <code>feed.adsb.lol</code> port <code>1338</code> or port <code>31090</code><li>
         </ul>
+        <p><a href="https://github.com/adsblol/feed">Feed client</a></p>
 
         {% set own_beast = clients_beast|length %}
         {% set own_mlat = clients_mlat|length %}
@@ -236,6 +232,7 @@
             </table>
             {% endif %}
             <h3>{{len_beast}} BEAST feeders. {{len_mlat}} MLAT feeders.</h3>
+            
             <p>All locations are approximate, and off by >50km</p>
     </div>
 
