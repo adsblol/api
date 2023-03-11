@@ -87,7 +87,7 @@ class Provider(object):
                     ) as resp:
                         data = await resp.json()
                     self.mlat_clients = data
-                    
+
                     print("Looped..")
                     await asyncio.sleep(1)
                 except Exception as e:
@@ -120,12 +120,10 @@ class Provider(object):
         clients_list = []
         keys_to_copy = "user privacy connection peer_count bad_sync_timeout outlier_percent".split()
         for name, client in clients.items():
-            print(client)
-            if ip is not None and client["source_ip"] != ip:
-                continue
-            clients_list.append(
-                {key: client[key] for key in keys_to_copy if key in client}
-            )
+            if ip is not None and client["source_ip"] == ip:
+                clients_list.append(
+                    {key: client[key] for key in keys_to_copy if key in client}
+                )
         return clients_list
 
     def anonymize_mlat_data(self, data):
