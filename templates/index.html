@@ -183,7 +183,11 @@
             <li><b>BEAST</b>: <code>feed.adsb.lol</code> port <code>1337</code> or <code>30004</code>, <code>30005</code></li>
             <li><b>MLAT</b>: <code>feed.adsb.lol</code> port <code>1338</code> or port <code>31090</code><li>
         </ul>
-        <p><a href="https://github.com/adsblol/feed">Feed client</a></p>
+        <p>Do you have readsb/dump1090 running locally already? You can use the <a href="https://github.com/adsblol/feed/tree/master">classic feed client</a>:<br/>
+            <code>curl -fsL -o /tmp/adsblol.sh https://adsb.lol/feed.sh && sudo bash /tmp/adsblol.sh</code>
+        </p>
+        <p>See <a href="https://github.com/adsblol/feed">the docker feed client</a> for a setup from scratch to feed ADSB/MLAT/(VDL2/ACARS) to many services.</p>
+            
 
         {% set own_beast = clients_beast|length %}
         {% set own_mlat = clients_mlat|length %}
