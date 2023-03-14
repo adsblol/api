@@ -1,5 +1,6 @@
 import typing
 import uuid
+import pathlib
 from datetime import datetime
 
 import orjson
@@ -19,6 +20,8 @@ from utils.api_v2 import router as v2_router
 from utils.dependencies import provider, redisVRS
 from utils.models import ApiUuidRequest, PrettyJSONResponse
 from utils.settings import REDIS_HOST
+
+PROJECT_PATH = pathlib.Path(__file__).parent
 
 description = """
 The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
@@ -57,7 +60,7 @@ app = FastAPI(
 app.include_router(v2_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="/app/templates")
+templates = Jinja2Templates(directory=PROJECT_PATH / "templates")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
