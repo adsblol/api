@@ -236,16 +236,15 @@ class RedisVRS:
         name, _, iata, location, countryiso2, lat, lon, alt_feet = data.split(
             ","
         )
-        alt_meters = int(alt_feet) * 0.3048
         ret = {
             "name": name,
             "icao": icao,
             "iata": iata,
             "location": location,
             "countryiso2": countryiso2,
-            "lat": lat,
-            "lon": lon,
-            "alt_feet": alt_feet,
-            "alt_meters": alt_meters,
+            "lat": float(lat),
+            "lon": float(lon),
+            "alt_feet": float(alt_feet),
+            "alt_meters": float(round(int(alt_feet) * 0.3048, 2)),
         }
         return ret
