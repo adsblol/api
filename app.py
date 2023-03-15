@@ -83,8 +83,6 @@ async def startup_event():
     await redisVRS.connect()
 
 
-
-
 @app.on_event("shutdown")
 async def shutdown_event():
     await provider.shutdown()
@@ -202,14 +200,25 @@ async def api_me(
     return response
 
 
-@app.get("/api/0/airport/{icao}", response_class=PrettyJSONResponse, tags=["v0"])
+@app.get(
+    "/api/0/airport/{icao}",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    description="Data by https://github.com/vradarserver/standing-data/",
+)
 async def api_airport(icao: str):
     """
     Return information about an airport.
     """
     return await redisVRS.get_airport(icao)
 
-@app.get("/api/0/route/{callsign}", response_class=PrettyJSONResponse, tags=["v0"])
+
+@app.get(
+    "/api/0/route/{callsign}",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    description="Data by https://github.com/vradarserver/standing-data/",
+)
 async def api_route(callsign: str):
     """
     Return information about a route.
