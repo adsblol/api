@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from redis import asyncio as aioredis
 
 from utils.api_v2 import router as v2_router
-from utils.dependencies import provider
+from utils.dependencies import provider, redisVRS
 from utils.models import ApiUuidRequest, PrettyJSONResponse
 from utils.settings import REDIS_HOST
 
@@ -79,6 +79,10 @@ async def startup_event():
     await provider.startup()
     redis = aioredis.from_url(REDIS_HOST, encoding="utf8", decode_responses=True)
     FastAPICache.init(RedisBackend(redis), prefix="api")
+    redisVRS.redis_connection_string = REDIS_HOST
+    await redisVRS.connect()
+
+
 
 
 @app.on_event("shutdown")
@@ -196,6 +200,21 @@ async def api_me(
     }
 
     return response
+
+
+@app.get("/api/0/airport/{icao}", response_class=PrettyJSONResponse, tags=["v0"])
+async def api_airport(icao: str):
+    """
+    Return information about an airport.
+    """
+    return await redisVRS.get_airport(icao)
+
+@app.get("/api/0/route/{callsign}", response_class=PrettyJSONResponse, tags=["v0"])
+async def api_route(callsign: str):
+    """
+    Return information about a route.
+    """
+    return await redisVRS.get_route(callsign)
 
 
 if __name__ == "__main__":

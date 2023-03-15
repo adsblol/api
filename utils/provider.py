@@ -1,4 +1,5 @@
 import asyncio
+import csv
 import traceback
 import uuid
 from datetime import datetime
@@ -6,6 +7,7 @@ from functools import lru_cache
 
 import aiohttp
 import bcrypt
+import redis.asyncio as redis
 
 from .reapi import ReAPI
 from .settings import REAPI_ENDPOINT, STATS_URL
@@ -158,3 +160,92 @@ class Provider(object):
         except ValueError:
             print(f"Unable to hash {name[:4]}...")
             return name
+
+
+class RedisVRS:
+    def __init__(self, redis=None):
+        self.redis_connection_string = redis
+        self.redis = None
+
+    async def download_csv_to_import(self):
+        print("vrsx download_csv_to_import")
+        CSVS = {
+            "route": "https://github.com/adsblol/hacks/releases/download/test-vrs-data/routes.csv",
+            "airport": "https://github.com/adsblol/hacks/releases/download/test-vrs-data/airports.csv",
+        }
+        fieldNames = {
+            "route": "Callsign,Code,Number,AirlineCode,AirportCodes",
+            "airport": "Code,Name,ICAO,IATA,Location,CountryISO2,Latitude,Longitude,AltitudeFeet"
+        }
+        async with aiohttp.ClientSession() as session:
+            for name, url in CSVS.items():
+                print('vrsx', name)
+                # Download CSV
+                async with session.get(url) as resp:
+                    if resp.status != 200:
+                        raise Exception(f"Unable to download {url}")
+                    data = await resp.text()
+                    # Import to Redis!
+                    # upsert. key= name:column0, value=rest of row
+                    # make redis transaction
+                    pipeline = self.redis.pipeline()
+
+                    for row in csv.DictReader(data.splitlines(), fieldnames=fieldNames[name].split(",")):
+                        values = list(row.values())
+                        key = f"vrs:{name}:{values[0]}"
+                        rest_of_row = ",".join(values[1:])
+                        pipeline = pipeline.set(key, rest_of_row)
+                    print('vrsx y', len(pipeline))
+                    await pipeline.execute()
+
+
+    async def connect(self):
+        print(self.redis_connection_string)
+        self.redis = await redis.from_url(self.redis_connection_string)
+        await self.download_csv_to_import()
+
+    async def get_route(self, callsign):
+        data = (await self.redis.get(f"vrs:route:{callsign}")).decode()
+        print("vrsx", callsign, data)
+        code, number, airlinecode, airportcodes = data.split(",")
+        ret = {
+            "callsign": callsign,
+            "number": number,
+            "airline_code": airlinecode,
+            "airport_codes": airportcodes,
+            "_airport_codes_iata": airportcodes,
+            "_airports": []
+        }
+        # _airport_codes_iata converts ICAO to IATA if possible.
+        for airport in ret["airport_codes"].split("-"):
+            airport_data = await self.get_airport(airport)
+            if len(airport) == 4:
+                # Get IATA if exists
+                if len(airport_data["iata"]) == 3:
+                    ret["_airport_codes_iata"] = ret["_airport_codes_iata"].replace(
+                        airport, airport_data["iata"]
+                    )
+            ret["_airports"].append(airport_data)
+        return ret
+
+    async def get_airport(self, icao):
+        data = (await self.redis.get(f"vrs:airport:{icao}")).decode()
+        print("vrsx", icao, data)
+        if data is None:
+            return None
+        name, _, iata, location, countryiso2, lat, lon, alt_feet = data.split(
+            ","
+        )
+        alt_meters = int(alt_feet) * 0.3048
+        ret = {
+            "name": name,
+            "icao": icao,
+            "iata": iata,
+            "location": location,
+            "countryiso2": countryiso2,
+            "lat": lat,
+            "lon": lon,
+            "alt_feet": alt_feet,
+            "alt_meters": alt_meters,
+        }
+        return ret

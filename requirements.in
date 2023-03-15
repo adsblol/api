@@ -9,3 +9,4 @@ uvicorn[standard]
 pytest-asyncio
 fastapi-cache2[redis]
 orjson
+aioredis
