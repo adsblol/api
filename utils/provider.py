@@ -205,7 +205,20 @@ class RedisVRS:
         await self.download_csv_to_import()
 
     async def get_route(self, callsign):
-        data = (await self.redis.get(f"vrs:route:{callsign}")).decode()
+        vrsroute = await self.redis.get(f"vrs:route:{callsign}")
+        if vrsroute is None:
+            print("vrsx didn't have data on", callsign)
+            ret = {
+                "callsign": callsign,
+                "number": "unknown",
+                "airline_code": "unknown",
+                "airport_codes": "unknown",
+                "_airport_codes_iata": "unknown",
+                "_airports": []
+            }
+            return ret
+
+        data = vrsroute.decode()
         print("vrsx", callsign, data)
         code, number, airlinecode, airportcodes = data.split(",")
         ret = {
