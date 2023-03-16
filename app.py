@@ -81,11 +81,13 @@ async def startup_event():
     FastAPICache.init(RedisBackend(redis), prefix="api")
     redisVRS.redis_connection_string = REDIS_HOST
     await redisVRS.connect()
+    await redisVRS.dispatch_background_task()
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     await provider.shutdown()
+    await redisVRS.shutdown()
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)

@@ -166,16 +166,16 @@ class RedisVRS:
     def __init__(self, redis=None):
         self.redis_connection_string = redis
         self.redis = None
+        self.background_task = None
+
+    def shutdown(self):
+        self.background_task.cancel()
 
     async def download_csv_to_import(self):
         print("vrsx download_csv_to_import")
         CSVS = {
-            "route": "https://github.com/adsblol/hacks/releases/download/test-vrs-data/routes.csv",
-            "airport": "https://github.com/adsblol/hacks/releases/download/test-vrs-data/airports.csv",
-        }
-        fieldNames = {
-            "route": "Callsign,Code,Number,AirlineCode,AirportCodes",
-            "airport": "Code,Name,ICAO,IATA,Location,CountryISO2,Latitude,Longitude,AltitudeFeet"
+            "route": "https://vrs-standing-data.adsb.lol/routes.csv",
+            "airport": "https://vrs-standing-data.adsb.lol/airports.csv",
         }
         async with aiohttp.ClientSession() as session:
             for name, url in CSVS.items():
@@ -190,7 +190,7 @@ class RedisVRS:
                     # make redis transaction
                     pipeline = self.redis.pipeline()
 
-                    for row in csv.DictReader(data.splitlines(), fieldnames=fieldNames[name].split(",")):
+                    for row in csv.DictReader(data.splitlines()):
                         values = list(row.values())
                         key = f"vrs:{name}:{values[0]}"
                         rest_of_row = ",".join(values[1:])
@@ -198,11 +198,25 @@ class RedisVRS:
                     print('vrsx y', len(pipeline))
                     await pipeline.execute()
 
+    async def _background_task(self):
+        try:
+            while True:
+                try:
+                    await self.download_csv_to_import()
+                    await asyncio.sleep(3600)
+                except Exception as e:
+                    print("Error in background task, retry in 1800s:", e)
+                    await asyncio.sleep(1800)
+        except asyncio.CancelledError:
+            print("VRS Background task cancelled")
+
+    async def dispatch_background_task(self):
+        self.background_task = asyncio.create_task(self._background_task())
+
 
     async def connect(self):
         print(self.redis_connection_string)
         self.redis = await redis.from_url(self.redis_connection_string)
-        await self.download_csv_to_import()
 
     async def get_route(self, callsign):
         vrsroute = await self.redis.get(f"vrs:route:{callsign}")
