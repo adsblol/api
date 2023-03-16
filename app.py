@@ -219,10 +219,11 @@ async def api_airport(icao: str):
     tags=["v0"],
     description="Data by https://github.com/vradarserver/standing-data/",
 )
-async def api_route(callsign: str):
+async def api_route(callsign: str, response: Response):
     """
     Return information about a route.
     """
+    response.headers["Access-Control-Allow-Origin"] = "*"
     return await redisVRS.get_route(callsign)
 
 
