@@ -170,7 +170,7 @@ async def api_me(
     mlat_clients = provider.mlat_clients_to_list(client_ip)
     response = {
         "feeding": {
-            "beast": len(beast_clients_list) > 0,
+            "beast": len(my_beast_clients) > 0,
             "mlat": len(mlat_clients) > 0,
         },
         "clients": {
