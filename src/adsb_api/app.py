@@ -11,14 +11,14 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
-from utils.api_v2 import router as v2_router
-from utils.dependencies import provider, redisVRS
-from utils.models import ApiUuidRequest, PrettyJSONResponse
-from utils.settings import REDIS_HOST
+from adsb_api.utils.api_v2 import router as v2_router
+from adsb_api.utils.dependencies import provider, redisVRS
+from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
+from adsb_api.utils.settings import REDIS_HOST
 
 import subprocess
 
-PROJECT_PATH = pathlib.Path(__file__).parent
+PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
 description = """
 The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
