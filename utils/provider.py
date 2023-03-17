@@ -105,8 +105,8 @@ class Provider(object):
         """Deduplicating setter."""
         clients = {}
 
-        for client in clients:
-            client = {
+        for client in client_rows:
+            clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
                 "hex": client[0],
                 "ip": client[1].split()[1],
                 "kbps": client[2],
@@ -118,8 +118,6 @@ class Provider(object):
                 "type": "beast",
             }
 
-        # deduplicate by hex and ip
-        clients = {(c["hex"], c["ip"]): c for c in clients}
         self.beast_clients = clients.values()
 
     def mlat_clients_to_list(self, ip=None):
