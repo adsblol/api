@@ -1,3 +1,4 @@
+import logging
 import typing
 import uuid
 import pathlib
@@ -22,6 +23,7 @@ from utils.models import ApiUuidRequest, PrettyJSONResponse
 from utils.settings import REDIS_HOST
 
 PROJECT_PATH = pathlib.Path(__file__).parent
+logger = logging.getLogger(__name__)
 
 description = """
 The adsb.lol API is a free and open source API for the [adsb.lol](https://adsb.lol) project.
@@ -166,6 +168,7 @@ async def api_me(
     x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
 ):
     client_ip = x_original_forwarded_for
+    logger.debug('Client %s requested /me', client_ip)
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     mlat_clients = provider.mlat_clients_to_list(client_ip)
     response = {
