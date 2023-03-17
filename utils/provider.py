@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import psutil
 import traceback
 import uuid
 from datetime import datetime
@@ -92,6 +93,8 @@ class Provider(object):
                         data = await resp.json()
                     self.mlat_clients = data
 
+                    mem_used_mb = int(psutil.Process().memory_info().rss / 1000000)
+                    print(f"Memory used: {mem_used_mb} MB")
                     print("Looped..")
                     await asyncio.sleep(1)
                 except Exception as e:
