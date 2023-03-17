@@ -15,7 +15,8 @@ RUN BUILD_DEPS="libssl-dev cargo gcc g++ libffi-dev" && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 COPY . /app
-CMD uvicorn app:app --host 0.0.0.0 --port 80
+RUN pip install -e .
+CMD uvicorn src.adsb_api.app:app --host 0.0.0.0 --port 80
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
