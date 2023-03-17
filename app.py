@@ -16,6 +16,8 @@ from utils.dependencies import provider, redisVRS
 from utils.models import ApiUuidRequest, PrettyJSONResponse
 from utils.settings import REDIS_HOST
 
+import subprocess
+
 PROJECT_PATH = pathlib.Path(__file__).parent
 
 description = """
@@ -173,6 +175,62 @@ async def api_airport(icao: str):
     """
     return await redisVRS.get_airport(icao)
 
+def plausible(
+        posLat: str,
+        posLng: str,
+        airportALat: str,
+        airportALon: str,
+        airportBLat: str,
+        airportBLon: str):
+    distanceResult = subprocess.run(["/usr/local/bin/distance", posLat, posLng, airportALat, airportALon, airportBLat, airportBLon], capture_output=True)
+    distance = orjson.loads(distanceResult.stdout)
+    # lame assumption that the plane should be within 50nm or 5% or route distance of the great circle route
+    # no concern for direction, no handling of multi segment routes
+    threshold = 50
+    fivePercent = distance['distAB'] / 20
+    if fivePercent > threshold:
+        threshold = fivePercent
+    return distance['distPAB'] < threshold, distance['distAB']
+
+@app.get(
+    "/api/0/route/{callsign}/{lat}/{lng}",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    description="Data by https://github.com/vradarserver/standing-data/",
+)
+async def api_route3(
+        callsign: str,
+        lat: str = None,
+        lng: str = None,
+        ):
+    """
+    Return information about a route and plane position.
+    Return value includes a guess whether this is a plausible route, given plane position.
+    """
+    route = await redisVRS.get_route(callsign)
+    if route['airport_codes'] != 'unknown':
+        a = 0
+        isplausible = False
+        distance = 0
+        print(f"==> {callsign}:", end=" ")
+        # check all segments of the route (thank you, Southwest)
+        while a < len(route['_airports']) - 1:
+            b = a+1
+            airportA = route["_airports"][a]
+            airportB = route["_airports"][b]
+            print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
+            isplausible, distance = plausible(lat, lng, f"{airportA['lat']:.5f}", f"{airportA['lon']:.5f}", f"{airportB['lat']:.5f}", f"{airportB['lon']:.5f}")
+            if isplausible:
+                break
+            a = b  # try the next pair in mult segment routes
+
+        if isplausible == False:
+            print(f"implausible for position {lat}/{lng} (dist {distance}nm)")
+        else:
+            print(" [ok]")
+        route['plausible'] = isplausible
+    headers = { "Access-Control-Allow-Origin": "*" }
+    return PrettyJSONResponse(content = route, headers = headers)
 
 @app.get(
     "/api/0/route/{callsign}",
@@ -180,13 +238,15 @@ async def api_airport(icao: str):
     tags=["v0"],
     description="Data by https://github.com/vradarserver/standing-data/",
 )
-async def api_route(callsign: str, response: Response):
+async def api_route(
+        callsign: str,
+        ):
     """
     Return information about a route.
     """
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    return await redisVRS.get_route(callsign)
-
+    route = await redisVRS.get_route(callsign)
+    headers = { "Access-Control-Allow-Origin": "*" }
+    return PrettyJSONResponse(content = route, headers = headers)
 
 if __name__ == "__main__":
     print("Run with:")
