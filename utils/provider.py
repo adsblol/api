@@ -119,7 +119,7 @@ class Provider(object):
             }
 
         # deduplicate by hex and ip
-        clients = {(c["hex"], c["ip"]): c for c in deduplicated_clients}
+        clients = {(c["hex"], c["ip"]): c for c in clients}
         self.beast_clients = clients.values()
 
     def mlat_clients_to_list(self, ip=None):
