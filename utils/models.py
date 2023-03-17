@@ -19,6 +19,7 @@ class PrettyJSONResponse(Response):
             option=orjson.OPT_SORT_KEYS | orjson.OPT_INDENT_2,
         )
 
+
 class V2Response_LastPosition(BaseModel):
     lat: float
     lon: float
