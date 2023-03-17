@@ -166,20 +166,7 @@ async def api_me(
     x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
 ):
     client_ip = x_original_forwarded_for
-    beast_clients_set = provider.get_clients_per_client_ip(client_ip)
-    beast_clients_list = []
-    for client in beast_clients_set:
-        beast_clients_list.append(
-            {
-                "type": "beast",
-                "hex": client[0],
-                "kbps": client[2],
-                "connected_seconds": client[3],
-                "positions": client[7],
-                "messages_per_second": client[4],
-                "positions_per_second": client[5],
-            }
-        )
+    my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     mlat_clients = provider.mlat_clients_to_list(client_ip)
     response = {
         "feeding": {
@@ -187,7 +174,7 @@ async def api_me(
             "mlat": len(mlat_clients) > 0,
         },
         "clients": {
-            "beast": beast_clients_list,
+            "beast": my_beast_clients,
             "mlat": mlat_clients,
         },
         "client_ip": client_ip,
