@@ -122,7 +122,7 @@ async def test_v2_radius(test_client):
 
 
 @pytest.mark.asyncio
-async def test_v2_radius(test_client):
+async def test_api_me(test_client):
     async with test_client.get(f"{HOST}/api/0/me") as response:
         resp = await response.json()
 

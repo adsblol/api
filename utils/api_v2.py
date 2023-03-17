@@ -1,11 +1,9 @@
-from typing import Any
-
-from fastapi import APIRouter, Header, Path, Query
+from fastapi import APIRouter, Header, Path
 from fastapi.responses import ORJSONResponse
 from fastapi_cache.decorator import cache
 from .settings import REDIS_TTL
 from .dependencies import provider
-from .models import PrettyJSONResponse, V2Response_Model
+from .models import V2Response_Model
 
 router = APIRouter(
     prefix="/v2",
@@ -25,7 +23,6 @@ async def v2_pia(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = ["all", "filter_pia"]
 
@@ -44,7 +41,6 @@ async def v2_mil(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = ["all", "filter_mil"]
 
@@ -63,12 +59,12 @@ async def v2_ladd(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = ["all", "filter_ladd"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
     return res
+
 
 @router.get(
     "/squawk/{squawk}",
@@ -89,7 +85,6 @@ async def v2_squawk_filter(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = ["all", f"filter_squawk={squawk}"]
 
@@ -109,7 +104,6 @@ async def v2_type_filter(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = [f"find_type={aircraft_type}"]
 
@@ -135,7 +129,6 @@ async def v2_reg_filter(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = [f"find_reg={registration}"]
 
@@ -161,7 +154,6 @@ async def v2_hex_filter(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = [f"find_hex={icao_hex}"]
 
@@ -186,6 +178,7 @@ async def v2_callsign_filter(
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
     return res
+
 
 @router.get(
     "/point/{lat}/{lon}/{radius}",
@@ -227,7 +220,6 @@ async def v2_all(
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-
     client_ip = x_original_forwarded_for
     params = ["all"]
 

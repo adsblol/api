@@ -190,7 +190,7 @@ class RedisVRS:
         }
         async with aiohttp.ClientSession() as session:
             for name, url in CSVS.items():
-                print('vrsx', name)
+                print("vrsx", name)
                 # Download CSV
                 async with session.get(url) as resp:
                     if resp.status != 200:
@@ -206,7 +206,7 @@ class RedisVRS:
                         key = f"vrs:{name}:{values[0]}"
                         rest_of_row = ",".join(values[1:])
                         pipeline = pipeline.set(key, rest_of_row)
-                    print('vrsx y', len(pipeline))
+                    print("vrsx y", len(pipeline))
                     await pipeline.execute()
 
     async def _background_task(self):
@@ -224,7 +224,6 @@ class RedisVRS:
     async def dispatch_background_task(self):
         self.background_task = asyncio.create_task(self._background_task())
 
-
     async def connect(self):
         print(self.redis_connection_string)
         self.redis = await redis.from_url(self.redis_connection_string)
@@ -239,7 +238,7 @@ class RedisVRS:
                 "airline_code": "unknown",
                 "airport_codes": "unknown",
                 "_airport_codes_iata": "unknown",
-                "_airports": []
+                "_airports": [],
             }
             return ret
 
@@ -252,7 +251,7 @@ class RedisVRS:
             "airline_code": airlinecode,
             "airport_codes": airportcodes,
             "_airport_codes_iata": airportcodes,
-            "_airports": []
+            "_airports": [],
         }
         # _airport_codes_iata converts ICAO to IATA if possible.
         for airport in ret["airport_codes"].split("-"):
@@ -271,9 +270,7 @@ class RedisVRS:
         print("vrsx", icao, data)
         if data is None:
             return None
-        name, _, iata, location, countryiso2, lat, lon, alt_feet = data.split(
-            ","
-        )
+        name, _, iata, location, countryiso2, lat, lon, alt_feet = data.split(",")
         ret = {
             "name": name,
             "icao": icao,

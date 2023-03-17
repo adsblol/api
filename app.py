@@ -1,19 +1,14 @@
-import typing
 import uuid
 import pathlib
-from datetime import datetime
 
 import orjson
-from aiohttp import web
-from fastapi import FastAPI, Header, Query, Request
-from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi import FastAPI, Header, Request
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
-from fastapi_cache.decorator import cache
-from pydantic import BaseModel
 from redis import asyncio as aioredis
 
 from utils.api_v2 import router as v2_router
