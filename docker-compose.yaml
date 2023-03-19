@@ -13,6 +13,8 @@ services:
       - .:/app
     ports:
       - 8089:80
+    #environment:
+    # VRS_API_ONLY: true
   redis:
     image: redis:alpine
     ports:
