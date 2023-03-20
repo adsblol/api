@@ -89,28 +89,6 @@ async def shutdown_event():
     await redisVRS.shutdown()
 
 
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def index(
-    request: Request, x_original_forwarded_for: str | None = Header(default=None)
-):
-    """
-    Return the index.html page with the client numbers.
-    """
-    client_ip = x_original_forwarded_for
-    clients_beast = provider.get_clients_per_client_ip(client_ip)
-    clients_mlat = provider.mlat_clients_to_list(client_ip)
-    context = {
-        "clients_beast": clients_beast,
-        "clients_mlat": clients_mlat,
-        "ip": client_ip,
-        "len_beast": len(provider.beast_clients),
-        "len_mlat": len(provider.mlat_clients),
-        "request": request,
-    }
-    response = templates.TemplateResponse("index.html", context)
-    return response
-
-
 @app.get("/api/0/receivers", response_class=PrettyJSONResponse, include_in_schema=False)
 async def receivers():
     return provider.beast_receivers
