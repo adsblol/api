@@ -42,7 +42,11 @@ class Provider():
             print(f"Started background task {task['name']}")
 
     async def shutdown(self):
-        self.bg_task.cancel()
+        for task in self.bg_tasks:
+            if task['instance'] is not None:
+                task['instance'].cancel()
+                await task['instance']
+
         await self.client_session.close()
 
     async def fetch_hub_stats(self):
@@ -198,8 +202,9 @@ class RedisVRS:
         self.redis = None
         self.background_task = None
 
-    def shutdown(self):
+    async def shutdown(self):
         self.background_task.cancel()
+        await self.background_task
 
     async def download_csv_to_import(self):
         print("vrsx download_csv_to_import")
