@@ -13,7 +13,7 @@ from .reapi import ReAPI
 from .settings import REAPI_ENDPOINT, STATS_URL
 
 
-class Provider():
+class Provider:
     def __init__(self, enabled_bg_tasks):
         self.beast_clients = list()
         self.beast_receivers = []
@@ -23,12 +23,11 @@ class Provider():
         self.aircraft_totalcount = 0
         self.ReAPI = ReAPI(REAPI_ENDPOINT)
         self.bg_tasks = [
-            {'name': 'fetch_hub_stats', 'task': self.fetch_hub_stats, 'instance': None},
-            {'name': 'fetch_ingest', 'task': self.fetch_ingest, 'instance': None},
-            {'name': 'fetch_mlat', 'task': self.fetch_mlat, 'instance': None},
+            {"name": "fetch_hub_stats", "task": self.fetch_hub_stats, "instance": None},
+            {"name": "fetch_ingest", "task": self.fetch_ingest, "instance": None},
+            {"name": "fetch_mlat", "task": self.fetch_mlat, "instance": None},
         ]
         self.enabled_bg_tasks = enabled_bg_tasks
-
 
     async def startup(self):
         self.client_session = aiohttp.ClientSession(
@@ -36,16 +35,16 @@ class Provider():
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
         for task in self.bg_tasks:
-            if task['name'] not in self.enabled_bg_tasks:
+            if task["name"] not in self.enabled_bg_tasks:
                 continue
-            task['instance'] = asyncio.create_task(task['task']())
+            task["instance"] = asyncio.create_task(task["task"]())
             print(f"Started background task {task['name']}")
 
     async def shutdown(self):
         for task in self.bg_tasks:
-            if task['instance'] is not None:
-                task['instance'].cancel()
-                await task['instance']
+            if task["instance"] is not None:
+                task["instance"].cancel()
+                await task["instance"]
 
         await self.client_session.close()
 
@@ -133,12 +132,10 @@ class Provider():
         for client in client_rows:
             clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
                 "hex": client[0],
-                "ip": client[1].split()[1],
                 "kbps": client[2],
-                "conn_time": client[3],
-                "msg_s": client[4],
-                "position_s": client[5],
-                "reduce_signal": client[6],
+                "connected_seconds": client[3],
+                "messages_per_second": client[4],
+                "positions_per_second": client[5],
                 "positions": client[8],
                 "type": "beast",
             }
@@ -150,7 +147,14 @@ class Provider():
         Return mlat clients with specified ip.
         """
         clients_list = []
-        keys_to_copy = "user privacy connection peer_count bad_sync_timeout outlier_percent".split()
+        keys_to_copy = [
+            "user",
+            "privacy",
+            "connection",
+            "peer_count",
+            "bad_sync_timeout",
+            "outlier_percent",
+        ]
 
         for name, client in self.mlat_clients.items():
             if ip is not None and client["source_ip"] == ip:
