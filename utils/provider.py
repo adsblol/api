@@ -13,8 +13,8 @@ from .reapi import ReAPI
 from .settings import REAPI_ENDPOINT, STATS_URL
 
 
-class Provider(object):
-    def __init__(self):
+class Provider():
+    def __init__(self, enabled_bg_tasks):
         self.beast_clients = list()
         self.beast_receivers = []
         self.mlat_sync_json = {}
@@ -22,34 +22,50 @@ class Provider(object):
         self.mlat_clients = {}
         self.aircraft_totalcount = 0
         self.ReAPI = ReAPI(REAPI_ENDPOINT)
+        self.bg_tasks = [
+            {'name': 'fetch_hub_stats', 'task': self.fetch_hub_stats, 'instance': None},
+            {'name': 'fetch_ingest', 'task': self.fetch_ingest, 'instance': None},
+            {'name': 'fetch_mlat', 'task': self.fetch_mlat, 'instance': None},
+        ]
+        self.enabled_bg_tasks = enabled_bg_tasks
+
 
     async def startup(self):
         self.client_session = aiohttp.ClientSession(
             raise_for_status=True,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
-        self.bg_task = asyncio.create_task(self.fetch_remote_data())
+        for task in self.bg_tasks:
+            if task['name'] not in self.enabled_bg_tasks:
+                continue
+            task['instance'] = asyncio.create_task(task['task']())
+            print(f"Started background task {task['name']}")
 
     async def shutdown(self):
         self.bg_task.cancel()
         await self.client_session.close()
 
-    async def fetch_remote_data(self):
+    async def fetch_hub_stats(self):
         try:
             while True:
                 try:
-                    # global update
-                    print("Fetching data from", STATS_URL)
                     async with self.client_session.get(STATS_URL) as resp:
                         data = await resp.json()
                     self.aircraft_totalcount = data["aircraft_with_pos"]
+                    await asyncio.sleep(10)
+                except Exception as e:
+                    traceback.print_exc()
+                    print("Error fetching stats, retry in 10s:", e)
+                    await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            print("Background task cancelled")
 
-                    # clients update
+    async def fetch_ingest(self):
+        try:
+            while True:
+                try:
                     ips = ["ingest-readsb:150"]
-                    print("Fetching data from", ips)
-                    clients = []
-                    receivers = []
-
+                    clients, receivers = [], []
                     # beast update
                     for ip in ips:
                         async with self.client_session.get(
@@ -71,32 +87,37 @@ class Provider(object):
                     self.set_beast_clients(clients)
                     self.beast_receivers = receivers
 
-                    # mlat update
-                    print("Fetching mlat data")
+                    await asyncio.sleep(5)
+                except Exception as e:
+                    traceback.print_exc()
+                    print("Error fetching ingest, retry in 10s:", e)
+                    await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            print("Background task cancelled")
+
+    async def fetch_mlat(self):
+        try:
+            while True:
+                try:
                     async with self.client_session.get(
                         "http://mlat-mlat-server:150/sync.json"
                     ) as resp:
                         data = await resp.json()
-                    print("Fetched mlat sync.json")
                     self.mlat_sync_json = self.anonymize_mlat_data(data)
                     self.mlat_totalcount_json = {
                         "0A": len(self.mlat_sync_json),
                         "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
                     }
-
-                    # mlat clients.json
-                    print("Fetching mlat clients.json")
                     async with self.client_session.get(
                         "http://mlat-mlat-server:150/clients.json"
                     ) as resp:
                         data = await resp.json()
                     self.mlat_clients = data
 
-                    print("Looped..")
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(5)
                 except Exception as e:
                     traceback.print_exc()
-                    print("Error in background task, retry in 10s:", e)
+                    print("Error in fetching mlat, retry in 10s:", e)
                     await asyncio.sleep(10)
         except asyncio.CancelledError:
             print("Background task cancelled")
