@@ -132,6 +132,7 @@ class Provider:
         for client in client_rows:
             clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
                 "hex": client[0],
+                "ip": client[1].split()[1],
                 "kbps": client[2],
                 "connected_seconds": client[3],
                 "messages_per_second": client[4],
