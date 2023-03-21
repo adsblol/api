@@ -10,6 +10,7 @@ def plausible(
     airportBLat: str,
     airportBLon: str,
 ):
+    # check if the position is within 50nm or 10% of the total distance of the great circle route
     distanceResult = subprocess.run(
         [
             "/usr/local/bin/distance",
@@ -19,15 +20,11 @@ def plausible(
             airportALon,
             airportBLat,
             airportBLon,
+            "50",
+            "10"
         ],
         capture_output=True,
     )
     distance = orjson.loads(distanceResult.stdout)
-    # lame assumption that the plane should be within
-    # 50nm or 5% or route distance of the great circle route
-    # no concern for direction, no handling of multi segment routes
-    threshold = 50
-    fivePercent = distance["distAB"] / 20
-    if fivePercent > threshold:
-        threshold = fivePercent
-    return distance["distPAB"] < threshold, distance["distAB"]
+    return distance['withinThreshold'], distance['distAB']
+
