@@ -295,10 +295,11 @@ class RedisVRS:
         return ret
 
     async def get_airport(self, icao):
-        data = (await self.redis.get(f"vrs:airport:{icao}")).decode()
-        print("vrsx", icao, data)
+        data = await self.redis.get(f"vrs:airport:{icao}")
         if data is None:
             return None
+        data = data.decode()
+        print("vrsx", icao, data)
         name, _, iata, location, countryiso2, lat, lon, alt_feet = data.split(",")
         ret = {
             "name": name,
