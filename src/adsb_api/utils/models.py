@@ -96,3 +96,13 @@ class V2Response_Model(BaseModel):
     now: int
     ptime: int
     total: int
+
+
+class PlaneInstance(BaseModel):
+    callsign: str
+    lat: str
+    lng: str
+
+
+class PlaneList(BaseModel):
+    planes: list[PlaneInstance] | None = None
