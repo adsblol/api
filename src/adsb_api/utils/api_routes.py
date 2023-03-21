@@ -1,19 +1,17 @@
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Response
 from adsb_api.utils.models import PrettyJSONResponse
 from adsb_api.utils.dependencies import redisVRS
 from adsb_api.utils.models import PlaneList
 from adsb_api.utils.plausible import plausible
 
-
-async def CORS(request: Request, response: Response):
-    response.headers[
-        "Access-Control-Allow-Origin"
-    ] = "https://globe.adsb.lol, https://adsb.lol, *"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+CORS_HEADERS = {
+        "Access-Control-Allow-Origin": "https://globe.adsb.lol, https://adsb.lol, *",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "access-control-allow-origin,content-type",
+    }
 
 
 router = APIRouter(
-    dependencies=[Depends(CORS)],
     prefix="/api",
     tags=["v0"],
 )
@@ -81,8 +79,7 @@ async def api_route3(
     this is a plausible route,given plane position.
     """
     route = await get_route_for_callsign_lat_lng(callsign, lat, lng)
-    headers = {"Access-Control-Allow-Origin": "*"}
-    return PrettyJSONResponse(content=route, headers=headers)
+    return PrettyJSONResponse(content=route, headers=CORS_HEADERS)
 
 
 @router.get(
@@ -98,8 +95,7 @@ async def api_route(
     Return information about a route.
     """
     route = await redisVRS.get_route(callsign)
-    headers = {"Access-Control-Allow-Origin": "*"}
-    return PrettyJSONResponse(content=route, headers=headers)
+    return PrettyJSONResponse(content=route, headers=CORS_HEADERS)
 
 
 @router.post(
@@ -120,13 +116,8 @@ async def api_routeset(planeList: PlaneList):
             plane.callsign, plane.lat, plane.lng
         )
         response.append(route)
-    headers = {"Access-Control-Allow-Origin": "*"}
-    return PrettyJSONResponse(content=response, headers=headers)
+    return PrettyJSONResponse(content=response, headers=CORS_HEADERS)
 
 @router.options("/0/routeset")
 async def api_routeset_options():
-    headers = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-    }
-    return Response(status_code=200, headers=headers)
+    return Response(status_code=200, headers=CORS_HEADERS)
