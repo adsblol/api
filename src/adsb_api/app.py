@@ -9,7 +9,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
+from fastapi.middleware.cors import CORSMiddleware
 from redis import asyncio as aioredis
+
+from pydantic import BaseModel
 
 from adsb_api.utils.api_v2 import router as v2_router
 from adsb_api.utils.dependencies import provider, redisVRS
@@ -192,28 +195,17 @@ def plausible(
         threshold = fivePercent
     return distance['distPAB'] < threshold, distance['distAB']
 
-@app.get(
-    "/api/0/route/{callsign}/{lat}/{lng}",
-    response_class=PrettyJSONResponse,
-    tags=["v0"],
-    description="Data by https://github.com/vradarserver/standing-data/",
-)
-async def api_route3(
+async def get_route_for_callsign_lat_lng(
         callsign: str,
-        lat: str = None,
-        lng: str = None,
+        lat: str,
+        lng: str
         ):
-    """
-    Return information about a route and plane position.
-    Return value includes a guess whether this is a plausible route, given plane position.
-    """
     route = await redisVRS.get_route(callsign)
     if route['airport_codes'] != 'unknown':
         a = 0
         isplausible = False
         distance = 0
         print(f"==> {callsign}:", end=" ")
-        # check all segments of the route (thank you, Southwest)
         while a < len(route['_airports']) - 1:
             b = a+1
             airportA = route["_airports"][a]
@@ -229,6 +221,24 @@ async def api_route3(
         else:
             print(" [ok]")
         route['plausible'] = isplausible
+    return route
+
+@app.get(
+    "/api/0/route/{callsign}/{lat}/{lng}",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    description="Data by https://github.com/vradarserver/standing-data/",
+)
+async def api_route3(
+        callsign: str,
+        lat: str = None,
+        lng: str = None,
+        ):
+    """
+    Return information about a route and plane position.
+    Return value includes a guess whether this is a plausible route, given plane position.
+    """
+    route = await get_route_for_callsign_lat_lng(callsign, lat, lng)
     headers = { "Access-Control-Allow-Origin": "*" }
     return PrettyJSONResponse(content = route, headers = headers)
 
@@ -238,6 +248,7 @@ async def api_route3(
     tags=["v0"],
     description="Data by https://github.com/vradarserver/standing-data/",
 )
+
 async def api_route(
         callsign: str,
         ):
@@ -247,6 +258,45 @@ async def api_route(
     route = await redisVRS.get_route(callsign)
     headers = { "Access-Control-Allow-Origin": "*" }
     return PrettyJSONResponse(content = route, headers = headers)
+
+
+class PlaneInstance(BaseModel):
+    callsign: str
+    lat: str
+    lng: str
+
+class PlaneList(BaseModel):
+    planes: list[PlaneInstance] | None = None
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.post(
+    "/api/0/routeset",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    description="Look up routes for multiple planes at ones. Data by https://github.com/vradarserver/standing-data/",
+)
+
+async def api_routeset(
+        planeList: PlaneList
+        ):
+    """
+    Return route information on a list of planes / positions
+    """
+    print(planeList)
+    response = []
+    for plane in planeList.planes:
+        route = await get_route_for_callsign_lat_lng(plane.callsign, plane.lat, plane.lng)
+        response.append(route)
+    headers = { "Access-Control-Allow-Origin": "*" }
+    return PrettyJSONResponse(content = response, headers = headers)
+
 
 if __name__ == "__main__":
     print("Run with:")
