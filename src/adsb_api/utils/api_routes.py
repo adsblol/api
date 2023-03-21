@@ -5,7 +5,7 @@ from adsb_api.utils.models import PlaneList
 from adsb_api.utils.plausible import plausible
 
 CORS_HEADERS = {
-        "Access-Control-Allow-Origin": "https://globe.adsb.lol, https://adsb.lol, *",
+        "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers": "access-control-allow-origin,content-type",
     }
