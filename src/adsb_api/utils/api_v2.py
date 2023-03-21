@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Header, Path
 from fastapi.responses import ORJSONResponse
 from fastapi_cache.decorator import cache
-from .settings import REDIS_TTL
-from .dependencies import provider
-from .models import V2Response_Model
+from adsb_api.utils.settings import REDIS_TTL
+from adsb_api.utils.dependencies import provider
+from adsb_api.utils.models import V2Response_Model
 
 router = APIRouter(
     prefix="/v2",

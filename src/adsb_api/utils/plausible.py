@@ -1,6 +1,7 @@
 import subprocess
 import orjson
 
+
 def plausible(
     posLat: str,
     posLng: str,
