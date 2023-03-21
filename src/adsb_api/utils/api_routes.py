@@ -122,3 +122,11 @@ async def api_routeset(planeList: PlaneList):
         response.append(route)
     headers = {"Access-Control-Allow-Origin": "*"}
     return PrettyJSONResponse(content=response, headers=headers)
+
+@router.options("/0/routeset")
+async def api_routeset_options():
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+    }
+    return Response(status_code=200, headers=headers)
