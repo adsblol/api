@@ -36,7 +36,7 @@ class Provider:
             raise_for_status=True,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
-        self.resolver = aiodns.DNSResolver(asyncio.get_event_loop())
+        self.resolver = aiodns.DNSResolver()
         for task in self.bg_tasks:
             if task["name"] not in self.enabled_bg_tasks:
                 continue
