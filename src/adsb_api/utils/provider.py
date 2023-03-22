@@ -10,8 +10,8 @@ import aiohttp
 import bcrypt
 import redis.asyncio as redis
 
-from adsb_api.reapi import ReAPI
-from adsb_api.settings import INGEST_DNS, INGEST_HTTP_PORT, REAPI_ENDPOINT, STATS_URL
+from adsb_api.utils.reapi import ReAPI
+from adsb_api.utils.settings import INGEST_DNS, INGEST_HTTP_PORT, REAPI_ENDPOINT, STATS_URL
 
 
 class Provider:
