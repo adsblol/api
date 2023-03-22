@@ -5,12 +5,13 @@ import uuid
 from datetime import datetime
 from functools import lru_cache
 
+import aiodns
 import aiohttp
 import bcrypt
 import redis.asyncio as redis
 
-from .reapi import ReAPI
-from .settings import REAPI_ENDPOINT, STATS_URL
+from adsb_api.reapi import ReAPI
+from adsb_api.settings import INGEST_DNS, INGEST_HTTP_PORT, REAPI_ENDPOINT, STATS_URL
 
 
 class Provider:
@@ -22,6 +23,7 @@ class Provider:
         self.mlat_clients = {}
         self.aircraft_totalcount = 0
         self.ReAPI = ReAPI(REAPI_ENDPOINT)
+        self.resolver = None
         self.bg_tasks = [
             {"name": "fetch_hub_stats", "task": self.fetch_hub_stats, "instance": None},
             {"name": "fetch_ingest", "task": self.fetch_ingest, "instance": None},
@@ -34,6 +36,7 @@ class Provider:
             raise_for_status=True,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
+        self.resolver = aiodns.DNSResolver(asyncio.get_event_loop())
         for task in self.bg_tasks:
             if task["name"] not in self.enabled_bg_tasks:
                 continue
@@ -67,25 +70,29 @@ class Provider:
         try:
             while True:
                 try:
-                    ips = ["ingest-readsb:150"]
+                    ips = [
+                        record.host
+                        for record in (await self.resolver.query(INGEST_DNS, "A"))
+                    ]
                     clients, receivers = [], []
                     # beast update
                     for ip in ips:
+                        url = f"http://{ip}:{INGEST_HTTP_PORT}/"
+
                         async with self.client_session.get(
-                            f"http://{ip}/clients.json"
+                            url + "clients.json"
                         ) as resp:
                             data = await resp.json()
                             clients += data["clients"]
                             print(len(clients), "clients")
 
                         async with self.client_session.get(
-                            f"http://{ip}/receivers.json"
+                            url + "receivers.json"
                         ) as resp:
                             data = await resp.json()
                             for receiver in data["receivers"]:
                                 lat, lon = round(receiver[8], 2), round(receiver[9], 2)
                                 receivers.append([lat, lon])
-                    print(len(receivers), "receivers")
 
                     self.set_beast_clients(clients)
                     self.beast_receivers = receivers
@@ -313,3 +320,13 @@ class RedisVRS:
             "alt_meters": float(round(int(alt_feet) * 0.3048, 2)),
         }
         return ret
+
+    # Add callsign to cache
+    async def set_plausible(self, callsign):
+        # set with expiry=1h
+        self.redis.set(f"vrs:plausible:{callsign}", 1)
+        self.redis.expire(f"vrs:plausible:{callsign}", 3600)
+
+    async def is_plausible(self, callsign):
+        # Check if callsign is plausible according to cache
+        return self.redis.get(f"vrs:plausible:{callsign}") is not None

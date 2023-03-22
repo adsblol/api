@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Response
 from adsb_api.utils.models import PrettyJSONResponse
 from adsb_api.utils.dependencies import redisVRS
 from adsb_api.utils.models import PlaneList
@@ -42,6 +42,9 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
             airportA = route["_airports"][a]
             airportB = route["_airports"][b]
             print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
+            is_plausible_cached = await redisVRS.is_plausible(callsign)
+            if is_plausible_cached:
+                break
             is_plausible, distance = plausible(
                 lat,
                 lng,
@@ -51,6 +54,7 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
                 f"{airportB['lon']:.5f}",
             )
             if is_plausible:
+                redisVRS.set_plausible(callsign)
                 break
             a = b  # try the next pair in mult segment routes
 
