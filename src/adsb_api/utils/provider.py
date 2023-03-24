@@ -11,7 +11,12 @@ import bcrypt
 import redis.asyncio as redis
 
 from adsb_api.utils.reapi import ReAPI
-from adsb_api.utils.settings import INGEST_DNS, INGEST_HTTP_PORT, REAPI_ENDPOINT, STATS_URL
+from adsb_api.utils.settings import (
+    INGEST_DNS,
+    INGEST_HTTP_PORT,
+    REAPI_ENDPOINT,
+    STATS_URL,
+)
 
 
 class Provider:
@@ -91,7 +96,7 @@ class Provider:
                         ) as resp:
                             data = await resp.json()
                             for receiver in data["receivers"]:
-                                lat, lon = round(receiver[8], 2), round(receiver[9], 2)
+                                lat, lon = round(receiver[8], 1), round(receiver[9], 1)
                                 receivers.append([lat, lon])
 
                     self.set_beast_clients(clients)
