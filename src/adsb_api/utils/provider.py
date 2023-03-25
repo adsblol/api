@@ -5,6 +5,7 @@ import traceback
 import uuid
 from datetime import datetime
 from functools import lru_cache
+import orjson
 
 import aiodns
 import aiohttp
@@ -22,6 +23,7 @@ from adsb_api.utils.settings import (
 
 class Provider:
     def __init__(self, enabled_bg_tasks):
+        self.aircrafts = {}
         self.beast_clients = list()
         self.beast_receivers = []
         self.mlat_sync_json = {}
@@ -30,6 +32,8 @@ class Provider:
         self.aircraft_totalcount = 0
         self.ReAPI = ReAPI(REAPI_ENDPOINT)
         self.resolver = None
+        self.redis = None
+        self.redis_connection_string = None
         self.bg_tasks = [
             {"name": "fetch_hub_stats", "task": self.fetch_hub_stats, "instance": None},
             {"name": "fetch_ingest", "task": self.fetch_ingest, "instance": None},
@@ -48,6 +52,7 @@ class Provider:
                 continue
             task["instance"] = asyncio.create_task(task["task"]())
             print(f"Started background task {task['name']}")
+        self.redis = await redis.from_url(self.redis_connection_string)
 
     async def shutdown(self):
         for task in self.bg_tasks:
@@ -96,11 +101,16 @@ class Provider:
                             url + "receivers.json"
                         ) as resp:
                             data = await resp.json()
+                            pipeline = self.redis.pipeline()
                             for receiver in data["receivers"]:
+                                key = f"receiver:{receiver[0]}"
+                                pipeline = pipeline.set(key, orjson.dumps(receiver))
+                                pipeline = pipeline.expire(key, 60)
                                 lat, lon = round(receiver[8], 1), round(receiver[9], 1)
                                 receivers.append([lat, lon])
+                            await pipeline.execute()
 
-                    self.set_beast_clients(clients)
+                    await self.set_beast_clients(clients)
                     self.beast_receivers = receivers
 
                     await asyncio.sleep(5)
@@ -138,13 +148,17 @@ class Provider:
         except asyncio.CancelledError:
             print("Background task cancelled")
 
-    def set_beast_clients(self, client_rows):
+    async def set_beast_clients(self, client_rows):
         """Deduplicating setter."""
         clients = {}
 
         for client in client_rows:
+            uid = self.cachehash_uid(client[0])
+            await self.redis.set(f"uid:{uid}", client[0])
+            await self.redis.expire(f"uid:{uid}", 60)
+
             clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
-                "hex": client[0],
+                "uid": uid,
                 "ip": client[1].split()[1],
                 "kbps": client[2],
                 "connected_seconds": client[3],
@@ -212,6 +226,17 @@ class Provider:
         except ValueError:
             print(f"Unable to hash {name[:4]}...")
             return name
+
+    @lru_cache(maxsize=2048)
+    def cachehash_uid(self, name):
+        salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
+        _hash = bcrypt.hashpw(name.encode(), salt).decode()
+        candidate = "".join([c for c in _hash if c.isalnum()])[-15:]
+        name_id = candidate[-15:]
+        if name.endswith("-0000-000000000000"):
+            name_id = f"ip{name_id}"
+        name_id = name_id.lower()
+        return name_id.lower()
 
 
 class RedisVRS:
@@ -344,3 +369,96 @@ class RedisVRS:
     async def is_plausible(self, callsign):
         # Check if callsign is plausible according to cache
         return self.redis.get(f"vrs:plausible:{callsign}") is not None
+
+
+class FeederData:
+    def __init__(self, redis=None):
+        self.redis_connection_string = redis
+        self.redis = None
+        self.background_task = None
+        self.resolver = None
+        self.client_session = None
+
+    async def connect(self):
+        self.redis = await redis.from_url(self.redis_connection_string)
+        self.resolver = aiodns.DNSResolver()
+        self.client_session = aiohttp.ClientSession(
+            raise_for_status=True,
+            timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
+        )
+
+    async def shutdown(self):
+        self.background_task.cancel()
+        await self.background_task
+        await self.client_session.close()
+
+    async def _background_task(self):
+        try:
+            while True:
+                try:
+                    ips = [
+                        record.host
+                        for record in (await self.resolver.query(INGEST_DNS, "A"))
+                    ]
+                    receivers = []
+                    for ip in ips:
+                        url = f"http://{ip}:{INGEST_HTTP_PORT}/"
+                        async with self.client_session.get(
+                            url + "aircraft.json"
+                        ) as resp:
+                            data = await resp.json()
+                            pipeline = self.redis.pipeline()
+                            for aircraft in data["aircraft"]:
+                                pipeline = pipeline.set(
+                                    f"ac:{aircraft['hex']}", orjson.dumps(aircraft)
+                                )
+                                pipeline = pipeline.expire(f"ac:{aircraft['hex']}", 300)
+
+                                for receiver in aircraft.get("recentReceiverIds", []):
+                                    receivers.append(receiver)
+                                    # zadd to key with score=now,
+                                    key = f"acr:{receiver}"
+                                    pipeline = pipeline.zadd(
+                                        key,
+                                        {aircraft["hex"]: int(datetime.now().timestamp())},
+                                    )
+                                    pipeline = pipeline.expire(key, 60)
+                            # remove old entries
+                            pipeline = pipeline.zremrangebyscore(
+                                key, 0, datetime.now().timestamp() - 15
+                            )
+                            print("Pipeline: ", pipeline)
+                            await pipeline.execute()
+
+                    print("FeederData: Got data from", len(set(receivers)), "receivers")
+
+                    await asyncio.sleep(0.2)
+
+                except Exception as e:
+                    print("Error in background task, retry in 5s:", e)
+                    await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            print("FeederData cancelled")
+
+    async def dispatch_background_task(self):
+        self.background_task = asyncio.create_task(self._background_task())
+
+    async def get_aircraft(self, receiver):
+        # get only last 10 seconds
+        data = await self.redis.zrange(
+            f"acr:{receiver}",
+            -1,
+            int(datetime.now().timestamp()),
+            byscore=True,
+        )
+        print("get_aircraft", receiver, data)
+        if not data:
+            return None
+        ret = []
+        for ac in data:
+            ac = ac.decode()
+            ac_data = await self.redis.get(f"ac:{ac}")
+            if ac_data is None:
+                continue
+            ret.append(orjson.loads(ac_data.decode()))
+        return ret

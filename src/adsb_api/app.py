@@ -1,4 +1,5 @@
 import pathlib
+import time
 import uuid
 import ipaddress
 import orjson
@@ -11,9 +12,9 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
-from adsb_api.utils.api_v2 import router as v2_router
 from adsb_api.utils.api_routes import router as routes_router
-from adsb_api.utils.dependencies import provider, redisVRS
+from adsb_api.utils.api_v2 import router as v2_router
+from adsb_api.utils.dependencies import feederData, provider, redisVRS
 from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
 from adsb_api.utils.settings import REDIS_HOST
 
@@ -84,12 +85,15 @@ def docs_override():
 
 @app.on_event("startup")
 async def startup_event():
-    await provider.startup()
     redis = aioredis.from_url(REDIS_HOST, encoding="utf8", decode_responses=True)
     FastAPICache.init(RedisBackend(redis), prefix="api")
-    redisVRS.redis_connection_string = REDIS_HOST
+    for i in (redisVRS, provider, feederData):
+        i.redis_connection_string = REDIS_HOST
+    await provider.startup()
     await redisVRS.connect()
     await redisVRS.dispatch_background_task()
+    await feederData.connect()
+    await feederData.dispatch_background_task()
 
 
 @app.on_event("shutdown")
@@ -207,6 +211,75 @@ async def mylocalip_get(
         return templates.TemplateResponse(
             "mylocalip.html", {"ips": [], "request": request}
         )
+
+@app.get("/api/0/my", tags=["v0"])
+async def api_my(
+    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
+):
+    client_ip = x_original_forwarded_for
+    my_beast_clients = provider.get_clients_per_client_ip(client_ip)
+    uids = []
+    for client in my_beast_clients:
+        uids.append(client["uid"])
+    # redirect to
+    # uid1-uid2.my.adsb.lol
+    host = "https://" + "-".join(uids) + ".my.adsb.lol"
+    return RedirectResponse(url=host)
+
+
+@app.get(
+    "/data/receiver.json", response_class=PrettyJSONResponse, include_in_schema=False
+)
+async def receiver_json(
+    host: str | None = Header(default=None, include_in_schema=False)
+):
+    ret = {"refresh": 1000}
+    uids = host.split(".")[0].split("-")
+    lat, lon = 0, 0
+    for uid in uids:
+        print("xxxreceiver", uid)
+        print("xxxreceiver", host)
+        # try getting receiver for uid
+        receiver = await feederData.redis.get(f"uid:{uid}")
+        # uid is x-y-z-f , we need x-y-z
+        if not receiver:
+            continue
+        print("xxxreceiver, receiver", receiver)
+        receiver = receiver.decode()[:18]
+        rdata = await feederData.redis.get(f"receiver:{receiver}")
+        print("xxxreceiver, getting", f"receiver:{receiver}")
+        if rdata:
+            rdata = orjson.loads(rdata.decode())
+            print("xxxreceiver, rdata", rdata)
+            ret["lat"], ret["lon"] = round(rdata[8], 1), round(rdata[9], 1)
+            break
+    return ret
+
+
+@app.get(
+    "/data/aircraft.json",
+    response_class=PrettyJSONResponse,
+    include_in_schema=False,
+)
+async def aircraft_json(
+    host: str | None = Header(default=None, include_in_schema=False)
+):
+    print("xxxaircraft", host)
+    uids = host.split(".")[0].split("-")
+    ac = []
+    for uid in uids:
+        print("xxxaircraft uid", uid)
+        receiver = await feederData.redis.get(f"uid:{uid}")
+        if receiver:
+            receiver = receiver.decode()[:18]
+            data = await feederData.get_aircraft(receiver)
+            if data is not None:
+                ac.extend(data)
+    return {
+        "now": int(time.time()),
+        "messages": 0,
+        "aircraft": ac,
+    }
 
 
 if __name__ == "__main__":
