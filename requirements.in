@@ -1,7 +1,6 @@
 aiohttp
 jinja2
 aiohttp_jinja2
-bcrypt
 pyopenssl
 humanize
 fastapi
@@ -10,3 +9,4 @@ fastapi-cache2[redis]
 orjson
 aioredis
 aiodns
+humanhash3

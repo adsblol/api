@@ -10,6 +10,9 @@ services:
      - --reload
     volumes:
       - .:/app
+    environment:
+      - INSECURE=1
+      - ADSBLOL_ENABLED_BG_TASKS=
     ports:
       - 8089:80
   redis:

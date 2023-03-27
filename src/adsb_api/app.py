@@ -1,11 +1,12 @@
 import pathlib
+import secrets
 import time
 import uuid
 import ipaddress
 import orjson
 from fastapi import FastAPI, Header, Request
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import FileResponse, Response, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi_cache import FastAPICache
@@ -16,7 +17,7 @@ from adsb_api.utils.api_routes import router as routes_router
 from adsb_api.utils.api_v2 import router as v2_router
 from adsb_api.utils.dependencies import feederData, provider, redisVRS
 from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
-from adsb_api.utils.settings import REDIS_HOST
+from adsb_api.utils.settings import INSECURE, REDIS_HOST, SALT_MY, SALT_BEAST, SALT_MLAT
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
@@ -83,6 +84,25 @@ def docs_override():
     )
 
 
+def ensure_uuid_security():
+    # Each UUID should be at least 128 characters long
+    # and should be unique.
+    # If no UUIDs are set, generate some.
+    if INSECURE:
+        time.sleep(0.5)
+        print("WARNING: INSECURE MODE IS ENABLED")
+        print("WARNING: UUIDS WILL BE GENERATED ON EACH STARTUP!")
+        time.sleep(0.5)
+    salts = {"my": SALT_MY, "mlat": SALT_MLAT, "beast": SALT_BEAST}
+    for name, salt in salts.items():
+        if salt is None or len(salt) < 128:
+            print(f"WARNING: {name} salt is not secure")
+            print("WARNING: Overriding with random salt")
+            salts[name] = secrets.token_hex(128)
+            # print first chars of salt
+            print("WARNING: First 10 chars of salt: " + salts[name][:10])
+
+
 @app.on_event("startup")
 async def startup_event():
     redis = aioredis.from_url(REDIS_HOST, encoding="utf8", decode_responses=True)
@@ -94,6 +114,7 @@ async def startup_event():
     await redisVRS.dispatch_background_task()
     await feederData.connect()
     await feederData.dispatch_background_task()
+    ensure_uuid_security()
 
 
 @app.on_event("shutdown")
@@ -219,11 +240,15 @@ async def api_my(
     client_ip = x_original_forwarded_for
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     uids = []
+    if len(my_beast_clients) == 0:
+        return RedirectResponse(
+            url="https://adsb.lol#sorry-but-i-could-not-find-your-receiver?"
+        )
     for client in my_beast_clients:
-        uids.append(client["uid"])
+        uids.append(client["adsblol_my_hash"])
     # redirect to
-    # uid1-uid2.my.adsb.lol
-    host = "https://" + "-".join(uids) + ".my.adsb.lol"
+    # uid1_uid2.my.adsb.lol
+    host = "https://" + "_".join(uids) + ".my.adsb.lol"
     return RedirectResponse(url=host)
 
 
@@ -233,19 +258,29 @@ async def api_my(
 async def receiver_json(
     host: str | None = Header(default=None, include_in_schema=False)
 ):
-    ret = {"refresh": 1000}
-    uids = host.split(".")[0].split("-")
+    ret = {
+        "refresh": 1000,
+        "dbServer": True,
+        "readsb": True,
+        "history": 1,
+        "version": "adsb.lol",
+        "reapi": False,
+        "binCraft": False,
+        "zstd": False,
+    }
+    uids = host.split(".")[0].split("_")
     lat, lon = 0, 0
     for uid in uids:
         print("xxxreceiver", uid)
         print("xxxreceiver", host)
         # try getting receiver for uid
-        receiver = await feederData.redis.get(f"uid:{uid}")
-        # uid is x-y-z-f , we need x-y-z
-        if not receiver:
+        receiver = await feederData.redis.get(f"my:{uid}")
+        if receiver:
+            receiver = receiver.decode()[:18]
+        else:
             continue
+
         print("xxxreceiver, receiver", receiver)
-        receiver = receiver.decode()[:18]
         rdata = await feederData.redis.get(f"receiver:{receiver}")
         print("xxxreceiver, getting", f"receiver:{receiver}")
         if rdata:
@@ -265,15 +300,26 @@ async def aircraft_json(
     host: str | None = Header(default=None, include_in_schema=False)
 ):
     print("xxxaircraft", host)
-    uids = host.split(".")[0].split("-")
+    uids = host.split(".")[0].split("_")
     ac = []
     for uid in uids:
         print("xxxaircraft uid", uid)
-        receiver = await feederData.redis.get(f"uid:{uid}")
+        # we need to find the name of a redis key by its value!
+        receiver = await feederData.redis.get(f"my:{uid}")
         if receiver:
             receiver = receiver.decode()[:18]
+        else:
+            continue
+
+        if receiver:
             data = await feederData.get_aircraft(receiver)
             if data is not None:
+                # remove key recentReceiverIds if it exists
+                for aircraft in data:
+                    try:
+                        del aircraft["recentReceiverIds"]
+                    except KeyError:
+                        pass
                 ac.extend(data)
     return {
         "now": int(time.time()),

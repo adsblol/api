@@ -1,15 +1,17 @@
 import asyncio
 import csv
 import gzip
+import hashlib
+import re
 import traceback
 import uuid
 from datetime import datetime
 from functools import lru_cache
-import orjson
 
 import aiodns
 import aiohttp
-import bcrypt
+import humanhash
+import orjson
 import redis.asyncio as redis
 
 from adsb_api.utils.reapi import ReAPI
@@ -17,6 +19,8 @@ from adsb_api.utils.settings import (
     INGEST_DNS,
     INGEST_HTTP_PORT,
     REAPI_ENDPOINT,
+    SALT_MLAT,
+    SALT_MY,
     STATS_URL,
 )
 
@@ -104,8 +108,14 @@ class Provider:
                             pipeline = self.redis.pipeline()
                             for receiver in data["receivers"]:
                                 key = f"receiver:{receiver[0]}"
-                                pipeline = pipeline.set(key, orjson.dumps(receiver))
-                                pipeline = pipeline.expire(key, 60)
+                                pipeline = pipeline.set(
+                                    key, orjson.dumps(receiver), ex=60
+                                )
+                                # set the humanhashy of salted my uuid
+                                my_humanhashy = self._humanhashy(receiver[0], SALT_MY)
+                                pipeline = pipeline.set(
+                                    f"my:{my_humanhashy}", receiver[0], ex=60
+                                )
                                 lat, lon = round(receiver[8], 1), round(receiver[9], 1)
                                 receivers.append([lat, lon])
                             await pipeline.execute()
@@ -153,12 +163,11 @@ class Provider:
         clients = {}
 
         for client in client_rows:
-            uid = self.cachehash_uid(client[0])
-            await self.redis.set(f"uid:{uid}", client[0])
-            await self.redis.expire(f"uid:{uid}", 60)
-
             clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
-                "uid": uid,
+                # "adsblol_beast_id": self.salty_uuid(client[0], SALT_BEAST),
+                # "adsblol_beast_hash": self._humanhashy(client[0], SALT_BEAST),
+                "_hex": client[0],
+                "adsblol_my_hash": self._humanhashy(client[0][:18], SALT_MY),
                 "ip": client[1].split()[1],
                 "kbps": client[2],
                 "connected_seconds": client[3],
@@ -169,6 +178,16 @@ class Provider:
             }
 
         self.beast_clients = clients.values()
+
+    # def try_updating_redis_entry(self, key, value, salt, expiry=60):
+    #     """
+    #     Try to update redis entry with key and salt.
+    #     """
+    #     try:
+    #         key = key + ":" + value
+    #         self.redis.set(key, self.salty_uuid(key, salt), ex=expiry)
+    #     except Exception as e:
+    #         print("Error updating redis entry:", e)
 
     def mlat_clients_to_list(self, ip=None):
         """
@@ -197,9 +216,9 @@ class Provider:
         for name, value in data.items():
             sanitised_peers = {}
             for peer, peer_value in value["peers"].items():
-                sanitised_peers[self.cachehash(peer)] = peer_value
+                sanitised_peers[self.maybe_salty_uuid(peer, SALT_MLAT)] = peer_value
 
-            sanitized_data[self.cachehash(name)] = {
+            sanitized_data[self.maybe_salty_uuid(name, SALT_MLAT)] = {
                 "lat": value["lat"],
                 "lon": value["lon"],
                 "peers": sanitised_peers,
@@ -207,36 +226,53 @@ class Provider:
 
         return sanitized_data
 
-    def get_clients_per_client_ip(self, ip: str) -> list:
+    def get_clients_per_client_ip(self, ip: str, hide: bool= True) -> list:
         """
         Return Beast clients with specified ip.
+        :param ip: IP address to filter on.
+        :param hide: Whether to keys that starts with _.
         """
-        return [client for client in self.beast_clients if client["ip"] == ip]
+        ret = [client for client in self.beast_clients if client["ip"] == ip]
+        if hide:
+            ret = [{k: v for k, v in client.items() if not k.startswith("_")} for client in ret]
+        return ret
+
+    def get_clients_per_key_name(self, key_name: str, value: str) -> list:
+        """
+        Return Beast clients with specified key name.
+        """
+        return [client for client in self.beast_clients if client[key_name] == value]
 
     @lru_cache(maxsize=1024)
-    def cachehash(self, name):
-        # Only hash UUIDs
-        try:
-            uuid.UUID(name)
-            salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
-            _hash = bcrypt.hashpw(name.encode(), salt).decode()
-            candidate = "".join([c for c in _hash if c.isalnum()])[-13:]
-            name_id = name[0:3] + "_" + candidate[-13:]
-            return name_id
-        except ValueError:
-            print(f"Unable to hash {name[:4]}...")
-            return name
+    def salty_uuid(self, original_uuid: str, salt: str) -> str:
+        salted_bytes = original_uuid.encode() + salt.encode()
+        hashed_bytes = hashlib.sha3_256(salted_bytes).digest()
+        return str(uuid.UUID(bytes=hashed_bytes[:16]))
 
-    @lru_cache(maxsize=2048)
-    def cachehash_uid(self, name):
-        salt = b"$2b$04$OGq0aceBoTGtzkUfT0FGme"
-        _hash = bcrypt.hashpw(name.encode(), salt).decode()
-        candidate = "".join([c for c in _hash if c.isalnum()])[-15:]
-        name_id = candidate[-15:]
-        if name.endswith("-0000-000000000000"):
-            name_id = f"ip{name_id}"
-        name_id = name_id.lower()
-        return name_id.lower()
+    def maybe_salty_uuid(self, string_that_might_contain_uuid: str, salt: str) -> str:
+        # If the string is a UUID, return a salty UUID
+        # If the string contains an UUID, return a salty UUID of the UUID, but with the rest of the string
+        try:
+            return self.salty_uuid(str(uuid.UUID(string_that_might_contain_uuid)), salt)
+        except:
+            try:
+                return re.sub(
+                    r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+                    lambda match: self.salty_uuid(str(uuid.UUID(match.group(1))), salt),
+                    string_that_might_contain_uuid,
+                )
+            except:
+                return string_that_might_contain_uuid
+
+    @lru_cache(maxsize=1024)
+    def _humanhashy(self, original_uuid: str, salt: str = None, words: int = 4) -> str:
+        """
+        Return a human readable hash of a UUID. The salt is optional.
+        """
+        if salt:
+            original_uuid = self.salty_uuid(original_uuid, salt)
+        print("humanhashy", original_uuid, salt)
+        return humanhash.humanize(original_uuid.replace("-", ""), words=words)
 
 
 class RedisVRS:
@@ -363,8 +399,7 @@ class RedisVRS:
     # Add callsign to cache
     async def set_plausible(self, callsign):
         # set with expiry=1h
-        self.redis.set(f"vrs:plausible:{callsign}", 1)
-        self.redis.expire(f"vrs:plausible:{callsign}", 3600)
+        self.redis.set(f"vrs:plausible:{callsign}", 1, ex=3600)
 
     async def is_plausible(self, callsign):
         # Check if callsign is plausible according to cache
@@ -378,6 +413,9 @@ class FeederData:
         self.background_task = None
         self.resolver = None
         self.client_session = None
+        self.redis_aircrafts_updated_at = 0
+        self.receivers_ingests_updated_at = 0
+        self.ingest_aircrafts = {}
 
     async def connect(self):
         self.redis = await redis.from_url(self.redis_connection_string)
@@ -392,6 +430,34 @@ class FeederData:
         await self.background_task
         await self.client_session.close()
 
+    async def _update_redis_aircrafts(self, ip):
+        self.redis_aircrafts_updated_at = datetime.now().timestamp()
+        pipeline = self.redis.pipeline()
+        aircrafts = self.ingest_aircrafts[ip]["aircraft"]
+        print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
+        for aircraft in aircrafts:
+            pipeline = pipeline.set(
+                f"ac:{ip}:{aircraft['hex']}",
+                orjson.dumps(aircraft),
+                ex=10,
+            )
+        await pipeline.execute()
+
+    async def _update_aircrafts(self, ip):
+        # Update aircrafts list
+        # If redis_aircrafts_updated_at is more than 1s ago, update it
+        url = f"http://{ip}:{INGEST_HTTP_PORT}/"
+        async with self.client_session.get(url + "aircraft.json") as resp:
+            data = await resp.json()
+            self.ingest_aircrafts[ip] = data
+
+        # If redis_aircrafts_updated_at is more than 1s ago, update it
+        # We do this by exiting here if it has been updated recently
+        if datetime.now().timestamp() - self.redis_aircrafts_updated_at > 0.5:
+            self.redis_aircrafts_updated_at = datetime.now().timestamp()
+            print("xxx trying to update redis aircrafts")
+            await self._update_redis_aircrafts(ip)
+
     async def _background_task(self):
         try:
             while True:
@@ -400,45 +466,60 @@ class FeederData:
                         record.host
                         for record in (await self.resolver.query(INGEST_DNS, "A"))
                     ]
-                    receivers = []
+                    receivers = 0
+                    receivers_ingests = {}
+                    for ip in self.ingest_aircrafts.keys():
+                        if ip not in ips:
+                            del self.ingest_aircrafts[ip]
                     for ip in ips:
-                        url = f"http://{ip}:{INGEST_HTTP_PORT}/"
-                        async with self.client_session.get(
-                            url + "aircraft.json"
-                        ) as resp:
-                            data = await resp.json()
-                            pipeline = self.redis.pipeline()
-                            for aircraft in data["aircraft"]:
-                                pipeline = pipeline.set(
-                                    f"ac:{aircraft['hex']}", orjson.dumps(aircraft)
+                        await self._update_aircrafts(ip)
+                        data = self.ingest_aircrafts[ip]
+                        pipeline = self.redis.pipeline()
+                        for aircraft in data["aircraft"]:
+                            for receiver in aircraft.get("recentReceiverIds", []):
+                                receivers += 1
+                                receivers_ingests[receiver] = ip
+                                # zadd to key with score=now,
+                                key = f"receiver_ac:{receiver}"
+                                pipeline = pipeline.zadd(
+                                    key,
+                                    {aircraft["hex"]: int(datetime.now().timestamp())},
                                 )
-                                pipeline = pipeline.expire(f"ac:{aircraft['hex']}", 300)
+                    pipeline = self._try_updating_receivers_ingests(
+                        pipeline, receivers_ingests
+                    )
+                    print("Pipeline: ", pipeline)
+                    await pipeline.execute()
 
-                                for receiver in aircraft.get("recentReceiverIds", []):
-                                    receivers.append(receiver)
-                                    # zadd to key with score=now,
-                                    key = f"acr:{receiver}"
-                                    pipeline = pipeline.zadd(
-                                        key,
-                                        {aircraft["hex"]: int(datetime.now().timestamp())},
-                                    )
-                                    pipeline = pipeline.expire(key, 60)
-                            # remove old entries
-                            pipeline = pipeline.zremrangebyscore(
-                                key, 0, datetime.now().timestamp() - 15
-                            )
-                            print("Pipeline: ", pipeline)
-                            await pipeline.execute()
+                    print("FeederData: Got data from", receivers, "receivers")
 
-                    print("FeederData: Got data from", len(set(receivers)), "receivers")
-
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.1)
 
                 except Exception as e:
+                    traceback.print_exc()
                     print("Error in background task, retry in 5s:", e)
                     await asyncio.sleep(5)
         except asyncio.CancelledError:
             print("FeederData cancelled")
+
+    def _try_updating_receivers_ingests(self, pipeline, receivers_ingests):
+        if datetime.now().timestamp() - self.receivers_ingests_updated_at < 0.2:
+            # ^ if it has been updated recently, don't update it
+            return pipeline
+        self.receivers_ingests_updated_at = datetime.now().timestamp()
+        for receiver, ip in receivers_ingests.items():
+            pipeline = pipeline.zremrangebyscore(
+                f"receiver_ac:{receiver}",
+                -1,
+                int(datetime.now().timestamp() - 60),
+            )
+            pipeline = pipeline.expire(f"receiver_ac:{receiver}", 30)
+            pipeline = pipeline.set(
+                "receiver_ingest:" + receiver,
+                ip,
+                ex=30,
+            )
+        return pipeline
 
     async def dispatch_background_task(self):
         self.background_task = asyncio.create_task(self._background_task())
@@ -446,7 +527,7 @@ class FeederData:
     async def get_aircraft(self, receiver):
         # get only last 10 seconds
         data = await self.redis.zrange(
-            f"acr:{receiver}",
+            f"receiver_ac:{receiver}",
             -1,
             int(datetime.now().timestamp()),
             byscore=True,
@@ -455,9 +536,15 @@ class FeederData:
         if not data:
             return None
         ret = []
+        if ingest := await self.redis.get("receiver_ingest:" + receiver):
+            ingest = ingest.decode()
+        else:
+            print("error ingest not found")
+            return ret
+
         for ac in data:
             ac = ac.decode()
-            ac_data = await self.redis.get(f"ac:{ac}")
+            ac_data = await self.redis.get(f"ac:{ingest}:{ac}")
             if ac_data is None:
                 continue
             ret.append(orjson.loads(ac_data.decode()))
