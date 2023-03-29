@@ -259,17 +259,15 @@ async def receiver_json(
     host: str | None = Header(default=None, include_in_schema=False)
 ):
     ret = {
-        "refresh": 1000,
-        "dbServer": True,
         "readsb": True,
-        "history": 1,
         "version": "adsb.lol",
-        "reapi": False,
-        "binCraft": False,
-        "zstd": False,
+        "refresh": 1000,
     }
+    # add feederData.additional_receiver_params
+    # ret.update(feederData.additional_receiver_params)
+
     uids = host.split(".")[0].split("_")
-    lat, lon = 0, 0
+
     for uid in uids:
         print("xxxreceiver", uid)
         print("xxxreceiver", host)

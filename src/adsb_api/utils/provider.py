@@ -416,6 +416,7 @@ class FeederData:
         self.redis_aircrafts_updated_at = 0
         self.receivers_ingests_updated_at = 0
         self.ingest_aircrafts = {}
+        self.additional_receiver_params = {}
 
     async def connect(self):
         self.redis = await redis.from_url(self.redis_connection_string)
@@ -424,6 +425,17 @@ class FeederData:
             raise_for_status=True,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
+        await self._get_additional_receiver_params()
+
+    async def _get_additional_receiver_params(self):
+        # get https://globe.adsb.lol/data/receiver.json
+        async with self.client_session.get(
+            "https://globe.adsb.lol/data/receiver.json"
+        ) as resp:
+            data = await resp.json()
+            params = ["globeIndexGrid", "history", "refresh", "globeIndexSpecialTiles"]
+            for param in params:
+                self.additional_receiver_params[param] = data[param]
 
     async def shutdown(self):
         self.background_task.cancel()
@@ -468,7 +480,7 @@ class FeederData:
                     ]
                     receivers = 0
                     receivers_ingests = {}
-                    for ip in self.ingest_aircrafts.keys():
+                    for ip in list(self.ingest_aircrafts.keys()):
                         if ip not in ips:
                             del self.ingest_aircrafts[ip]
                     for ip in ips:
