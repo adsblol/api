@@ -21,7 +21,7 @@ def plausible(
             airportBLat,
             airportBLon,
             "50",
-            "10"
+            "20"
         ],
         capture_output=True,
     )
