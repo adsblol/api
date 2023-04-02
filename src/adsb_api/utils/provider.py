@@ -313,7 +313,10 @@ class RedisVRS:
             return None
         data = data.decode()
         print("vrsx", icao, data)
-        name, _, iata, location, countryiso2, lat, lon, alt_feet = list(csv.reader([data]))[0]
+        try:
+            __, name, _, iata, location, countryiso2, lat, lon, alt_feet = list(csv.reader([data]))[0]
+        except:
+            print(f"CSV-parsing: exception for {data}")
         ret = {
             "name": name,
             "icao": icao,
