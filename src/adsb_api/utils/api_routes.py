@@ -42,9 +42,6 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
             airportA = route["_airports"][a]
             airportB = route["_airports"][b]
             print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
-            is_plausible_cached = await redisVRS.is_plausible(callsign)
-            if is_plausible_cached:
-                break
             is_plausible, distance = plausible(
                 lat,
                 lng,
