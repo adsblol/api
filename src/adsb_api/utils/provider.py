@@ -314,7 +314,7 @@ class RedisVRS:
             return None
         data = data.decode()
         print("vrsx", icao, data)
-        name, _, iata, location, countryiso2, lat, lon, alt_feet = data.split(",")
+        name, _, iata, location, countryiso2, lat, lon, alt_feet = list(csv.reader([data]))[0]
         ret = {
             "name": name,
             "icao": icao,
