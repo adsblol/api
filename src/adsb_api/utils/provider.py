@@ -297,6 +297,8 @@ class RedisVRS:
         # _airport_codes_iata converts ICAO to IATA if possible.
         for airport in ret["airport_codes"].split("-"):
             airport_data = await self.get_airport(airport)
+            if not airport_data:
+                continue
             if len(airport) == 4:
                 # Get IATA if exists
                 if len(airport_data["iata"]) == 3:
