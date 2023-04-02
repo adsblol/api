@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import gzip
 import traceback
 import uuid
 from datetime import datetime
@@ -11,12 +12,8 @@ import bcrypt
 import redis.asyncio as redis
 
 from adsb_api.utils.reapi import ReAPI
-from adsb_api.utils.settings import (
-    INGEST_DNS,
-    INGEST_HTTP_PORT,
-    REAPI_ENDPOINT,
-    STATS_URL,
-)
+from adsb_api.utils.settings import (INGEST_DNS, INGEST_HTTP_PORT,
+                                     REAPI_ENDPOINT, STATS_URL)
 
 
 class Provider:
@@ -226,8 +223,8 @@ class RedisVRS:
     async def download_csv_to_import(self):
         print("vrsx download_csv_to_import")
         CSVS = {
-            "route": "https://vrs-standing-data.adsb.lol/routes.csv",
-            "airport": "https://vrs-standing-data.adsb.lol/airports.csv",
+            "route": "https://vrs-standing-data.adsb.lol/routes.csv.gz",
+            "airport": "https://vrs-standing-data.adsb.lol/airports.csv.gz",
         }
         async with aiohttp.ClientSession() as session:
             for name, url in CSVS.items():
@@ -236,7 +233,9 @@ class RedisVRS:
                 async with session.get(url) as resp:
                     if resp.status != 200:
                         raise Exception(f"Unable to download {url}")
-                    data = await resp.text()
+                    # Decompress
+                    data = await resp.read()
+                    data = gzip.decompress(data).decode("utf-8")
                     # Import to Redis!
                     # upsert. key= name:column0, value=rest of row
                     # make redis transaction
