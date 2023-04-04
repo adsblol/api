@@ -314,19 +314,20 @@ class RedisVRS:
         print("vrsx", icao, data)
         try:
             __, name, _, iata, location, countryiso2, lat, lon, alt_feet = list(csv.reader([data]))[0]
+            ret = {
+                "name": name,
+                "icao": icao,
+                "iata": iata,
+                "location": location,
+                "countryiso2": countryiso2,
+                "lat": float(lat),
+                "lon": float(lon),
+                "alt_feet": float(alt_feet),
+                "alt_meters": float(round(int(alt_feet) * 0.3048, 2)),
+            }
         except:
             print(f"CSV-parsing: exception for {data}")
-        ret = {
-            "name": name,
-            "icao": icao,
-            "iata": iata,
-            "location": location,
-            "countryiso2": countryiso2,
-            "lat": float(lat),
-            "lon": float(lon),
-            "alt_feet": float(alt_feet),
-            "alt_meters": float(round(int(alt_feet) * 0.3048, 2)),
-        }
+            ret = None
         return ret
 
     # Add callsign to cache
