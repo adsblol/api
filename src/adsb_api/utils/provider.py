@@ -237,7 +237,7 @@ class RedisVRS:
                     data = await resp.read()
                     data = gzip.decompress(data).decode("utf-8")
                     # Import to Redis!
-                    # upsert. key= name:column0, value=rest of row
+                    # upsert. key= name:column0, value=full row
                     # make redis transaction
                     pipeline = self.redis.pipeline()
 
@@ -283,7 +283,7 @@ class RedisVRS:
 
         data = vrsroute.decode()
         print("vrsx", callsign, data)
-        code, number, airlinecode, airportcodes = data.split(",")
+        _, code, number, airlinecode, airportcodes = data.split(",")
         ret = {
             "callsign": callsign,
             "number": number,
