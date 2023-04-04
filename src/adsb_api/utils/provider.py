@@ -12,8 +12,12 @@ import bcrypt
 import redis.asyncio as redis
 
 from adsb_api.utils.reapi import ReAPI
-from adsb_api.utils.settings import (INGEST_DNS, INGEST_HTTP_PORT,
-                                     REAPI_ENDPOINT, STATS_URL)
+from adsb_api.utils.settings import (
+    INGEST_DNS,
+    INGEST_HTTP_PORT,
+    REAPI_ENDPOINT,
+    STATS_URL,
+)
 
 
 class Provider:
@@ -242,8 +246,7 @@ class RedisVRS:
                     pipeline = self.redis.pipeline()
 
                     for row in data.splitlines():
-                        name = row.split(",")[0]
-                        key = f"vrs:{name}:{name}"
+                        key = f"vrs:{name}:{row.split(',')[0]}"
                         pipeline = pipeline.set(key, row)
                     print("vrsx y", len(pipeline))
                     await pipeline.execute()
@@ -313,7 +316,9 @@ class RedisVRS:
         data = data.decode()
         print("vrsx", icao, data)
         try:
-            __, name, _, iata, location, countryiso2, lat, lon, alt_feet = list(csv.reader([data]))[0]
+            __, name, _, iata, location, countryiso2, lat, lon, alt_feet = list(
+                csv.reader([data])
+            )[0]
             ret = {
                 "name": name,
                 "icao": icao,
