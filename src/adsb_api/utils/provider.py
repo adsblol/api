@@ -242,11 +242,10 @@ class RedisVRS:
                     # make redis transaction
                     pipeline = self.redis.pipeline()
 
-                    for row in csv.DictReader(data.splitlines()):
-                        values = list(row.values())
-                        key = f"vrs:{name}:{values[0]}"
-                        rest_of_row = ",".join(values[1:])
-                        pipeline = pipeline.set(key, rest_of_row)
+                    for row in data.splitlines():
+                        name = row.split(",")[0]
+                        key = f"vrs:{name}:{name}"
+                        pipeline = pipeline.set(key, row)
                     print("vrsx y", len(pipeline))
                     await pipeline.execute()
 
