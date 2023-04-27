@@ -1,0 +1,15 @@
+<html>
+<head>
+    <title>My Local IP</title>
+</head>
+<body>
+    <h1>My Local IP</h1>
+    <ul>
+        {% for ip in ips %}
+            <li><a href="http://{{ ip }}:5000/">http://{{ ip }}:5000/</a></li>
+        {% endfor %}
+        {% if ips == [] %}
+            <li>No IPs found</li>
+        {% endif %}
+    </ul>
+</html>

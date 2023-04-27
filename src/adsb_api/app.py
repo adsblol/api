@@ -1,10 +1,10 @@
 import pathlib
 import uuid
-
+import ipaddress
 import orjson
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, Request
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi_cache import FastAPICache
@@ -168,6 +168,45 @@ async def api_me(
     }
 
     return response
+
+
+@app.get("/0/mylocalip/{ips}", response_class=PrettyJSONResponse, tags=["v0"])
+async def mylocalip_put(
+    ips = str,
+    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
+):
+    client_ip = x_original_forwarded_for
+    # ips can be separated by ,
+    # ensure each IP is also somewhat valid.
+    ips = [ip for ip in ips.split(",") if ipaddress.ip_address(ip)]
+    if not ips:
+        return {"error": "no valid IPs found"}
+    await redisVRS.redis.setex("mylocalip:" + client_ip, 60, ",".join(ips))
+    return {"success": True, "ips": ips}
+
+@app.get("/0/mylocalip", tags=["v0"])
+async def mylocalip_get(
+    request: Request,
+    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
+):
+    client_ip = x_original_forwarded_for
+    # this is the page the user loads if they want to see their local IPs
+    # if there is only one ip, redirect them to it
+    # if there are multiple, show them some clickable links for each
+    # if there are none, show them a message saying no IPs found
+    my_ips = await redisVRS.redis.get("mylocalip:" + client_ip)
+    if my_ips:
+        my_ips = my_ips.decode().split(",")
+        if len(my_ips) == 1:
+            return RedirectResponse(url="http://" + my_ips[0] + ":5000/")
+        else:
+            return templates.TemplateResponse(
+                "mylocalip.html", {"ips": my_ips, "request": request}
+            )
+    else:
+        return templates.TemplateResponse(
+            "mylocalip.html", {"ips": [], "request": request}
+        )
 
 
 if __name__ == "__main__":
