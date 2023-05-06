@@ -10,3 +10,4 @@ orjson
 aioredis
 aiodns
 humanhash3
+playwright

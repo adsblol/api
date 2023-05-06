@@ -18,7 +18,7 @@ from adsb_api.utils.api_v2 import router as v2_router
 from adsb_api.utils.dependencies import feederData, provider, redisVRS
 from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
 from adsb_api.utils.settings import INSECURE, REDIS_HOST, SALT_MY, SALT_BEAST, SALT_MLAT
-
+from adsb_api.utils.api_tar import router as tar_router
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
 description = """
@@ -65,6 +65,7 @@ app = FastAPI(
 
 app.include_router(v2_router)
 app.include_router(routes_router)
+app.include_router(tar_router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory=PROJECT_PATH / "templates")
