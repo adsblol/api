@@ -207,21 +207,3 @@ async def v2_point(
         params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip
     )
     return res
-
-
-@router.get(
-    "/all",
-    response_class=ORJSONResponse,
-    summary="All aircrafts",
-    description="Returns all [aircraft](https://en.wikipedia.org/wiki/Aircraft).",
-)
-@cache(expire=REDIS_TTL)
-async def v2_all(
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
-) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
-    params = ["all"]
-
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
