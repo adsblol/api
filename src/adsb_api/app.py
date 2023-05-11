@@ -1,6 +1,7 @@
 import pathlib
 import secrets
 import time
+import traceback
 import uuid
 import ipaddress
 import orjson
@@ -14,11 +15,13 @@ from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
 from adsb_api.utils.api_routes import router as routes_router
-from adsb_api.utils.api_v2 import router as v2_router
-from adsb_api.utils.dependencies import feederData, provider, redisVRS
-from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
-from adsb_api.utils.settings import INSECURE, REDIS_HOST, SALT_MY, SALT_BEAST, SALT_MLAT
 from adsb_api.utils.api_tar import router as tar_router
+from adsb_api.utils.api_v2 import router as v2_router
+from adsb_api.utils.dependencies import browser, feederData, provider, redisVRS
+from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
+from adsb_api.utils.settings import (INSECURE, REDIS_HOST, SALT_BEAST,
+                                     SALT_MLAT, SALT_MY)
+
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
 description = """
@@ -115,6 +118,11 @@ async def startup_event():
     await redisVRS.dispatch_background_task()
     await feederData.connect()
     await feederData.dispatch_background_task()
+    try:
+        await browser.start()
+    except:
+        traceback.print_exc()
+
     ensure_uuid_security()
 
 
@@ -122,7 +130,7 @@ async def startup_event():
 async def shutdown_event():
     await provider.shutdown()
     await redisVRS.shutdown()
-
+    await browser.shutdown()
 
 @app.get("/api/0/receivers", response_class=PrettyJSONResponse, include_in_schema=False)
 async def receivers():
@@ -270,8 +278,6 @@ async def receiver_json(
     uids = host.split(".")[0].split("_")
 
     for uid in uids:
-        print("xxxreceiver", uid)
-        print("xxxreceiver", host)
         # try getting receiver for uid
         receiver = await feederData.redis.get(f"my:{uid}")
         if receiver:
@@ -279,12 +285,9 @@ async def receiver_json(
         else:
             continue
 
-        print("xxxreceiver, receiver", receiver)
         rdata = await feederData.redis.get(f"receiver:{receiver}")
-        print("xxxreceiver, getting", f"receiver:{receiver}")
         if rdata:
             rdata = orjson.loads(rdata.decode())
-            print("xxxreceiver, rdata", rdata)
             ret["lat"], ret["lon"] = round(rdata[8], 1), round(rdata[9], 1)
             break
     return ret
@@ -298,11 +301,9 @@ async def receiver_json(
 async def aircraft_json(
     host: str | None = Header(default=None, include_in_schema=False)
 ):
-    print("xxxaircraft", host)
     uids = host.split(".")[0].split("_")
     ac = []
     for uid in uids:
-        print("xxxaircraft uid", uid)
         # we need to find the name of a redis key by its value!
         receiver = await feederData.redis.get(f"my:{uid}")
         if receiver:

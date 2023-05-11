@@ -99,7 +99,7 @@ class Provider:
                         ) as resp:
                             data = await resp.json()
                             clients += data["clients"]
-                            print(len(clients), "clients")
+                            #print(len(clients), "clients")
 
                         async with self.client_session.get(
                             url + "receivers.json"
@@ -271,7 +271,7 @@ class Provider:
         """
         if salt:
             original_uuid = self.salty_uuid(original_uuid, salt)
-        print("humanhashy", original_uuid, salt)
+        #print("humanhashy", original_uuid, salt)
         return humanhash.humanize(original_uuid.replace("-", ""), words=words)
 
 
@@ -334,7 +334,7 @@ class RedisVRS:
     async def get_route(self, callsign):
         vrsroute = await self.redis.get(f"vrs:route:{callsign}")
         if vrsroute is None:
-            print("vrsx didn't have data on", callsign)
+            #print("vrsx didn't have data on", callsign)
             ret = {
                 "callsign": callsign,
                 "number": "unknown",
@@ -346,7 +346,7 @@ class RedisVRS:
             return ret
 
         data = vrsroute.decode()
-        print("vrsx", callsign, data)
+        #print("vrsx", callsign, data)
         _, code, number, airlinecode, airportcodes = data.split(",")
         ret = {
             "callsign": callsign,
@@ -375,7 +375,7 @@ class RedisVRS:
         if data is None:
             return None
         data = data.decode()
-        print("vrsx", icao, data)
+        #print("vrsx", icao, data)
         try:
             __, name, _, iata, location, countryiso2, lat, lon, alt_feet = list(
                 csv.reader([data])
@@ -392,7 +392,7 @@ class RedisVRS:
                 "alt_meters": float(round(int(alt_feet) * 0.3048, 2)),
             }
         except:
-            print(f"CSV-parsing: exception for {data}")
+            #print(f"CSV-parsing: exception for {data}")
             ret = None
         return ret
 
@@ -446,7 +446,7 @@ class FeederData:
         self.redis_aircrafts_updated_at = datetime.now().timestamp()
         pipeline = self.redis.pipeline()
         aircrafts = self.ingest_aircrafts[ip]["aircraft"]
-        print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
+        #print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
         for aircraft in aircrafts:
             pipeline = pipeline.set(
                 f"ac:{ip}:{aircraft['hex']}",
@@ -467,7 +467,7 @@ class FeederData:
         # We do this by exiting here if it has been updated recently
         if datetime.now().timestamp() - self.redis_aircrafts_updated_at > 0.5:
             self.redis_aircrafts_updated_at = datetime.now().timestamp()
-            print("xxx trying to update redis aircrafts")
+            #print("xxx trying to update redis aircrafts")
             await self._update_redis_aircrafts(ip)
 
     async def _background_task(self):
@@ -500,10 +500,10 @@ class FeederData:
                     pipeline = self._try_updating_receivers_ingests(
                         pipeline, receivers_ingests
                     )
-                    print("Pipeline: ", pipeline)
+                    #print("Pipeline: ", pipeline)
                     await pipeline.execute()
 
-                    print("FeederData: Got data from", receivers, "receivers")
+                    #print("FeederData: Got data from", receivers, "receivers")
 
                     await asyncio.sleep(0.1)
 
@@ -544,7 +544,7 @@ class FeederData:
             int(datetime.now().timestamp()),
             byscore=True,
         )
-        print("get_aircraft", receiver, data)
+        #print("get_aircraft", receiver, data)
         if not data:
             return None
         ret = []

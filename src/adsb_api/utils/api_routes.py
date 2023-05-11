@@ -36,12 +36,12 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
         a = 0
         is_plausible = False
         distance = 0
-        print(f"==> {callsign}:", end=" ")
+        #print(f"==> {callsign}:", end=" ")
         while a < len(route["_airports"]) - 1:
             b = a + 1
             airportA = route["_airports"][a]
             airportB = route["_airports"][b]
-            print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
+            #print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
             is_plausible, distance = plausible(
                 lat,
                 lng,
@@ -56,9 +56,11 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
             a = b  # try the next pair in mult segment routes
 
         if not is_plausible:
-            print(f"implausible {lat}/{lng} (dist {distance}nm)")
+            #print(f"implausible {lat}/{lng} (dist {distance}nm)")
+            ...
         else:
-            print(" [ok]")
+            #print(" [ok]")
+            ...
         route["plausible"] = is_plausible
     return route
 
@@ -110,7 +112,7 @@ async def api_routeset(planeList: PlaneList):
     """
     Return route information on a list of planes / positions
     """
-    print(planeList)
+    #print(planeList)
     response = []
     for plane in planeList.planes:
         route = await get_route_for_callsign_lat_lng(
