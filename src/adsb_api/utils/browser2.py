@@ -13,8 +13,8 @@ class BrowserTabPool:
     def __init__(
         self,
         url: str,
-        min_tabs: int = 4,
-        max_tabs: int = 8,
+        min_tabs: int = 2,
+        max_tabs: int = 4,
         tab_ttl: int = 600,
         tab_max_uses: int = 200,
         before_add_to_pool_cb=None,
@@ -90,6 +90,9 @@ class BrowserTabPool:
                 self.logger.error("Tab is not good to go. Removing tab from pool...")
                 await self._remove_tab(tab)
                 return
+        if self.before_return_to_pool_cb:
+            await self.before_return_to_pool_cb(tab)
+
         self.logger.info(
             "Tab added to pool. Total number of tabs: %s / min: %s, max: %s",
             self._total_tabs,
@@ -233,7 +236,7 @@ async def before_add_to_pool_cb(page):
         page.route("**/globeRates.json", lambda route: route.abort()),
         page.route("https://api.planespotters.net/*", lambda route: route.abort()),
         page.set_viewport_size({"width": 512, "height": 512}),
-        page.goto("?screenshot&zoom=6&hideButtons&hideSidebar&lat=82&lon=-5"),
+        page.goto("?screenshot&zoom=6&hideButtons&hideSidebar&lat=82&lon=-5&nowebGL"),
     ]
     try:
         with timeout(5):
@@ -303,6 +306,59 @@ async def before_add_to_pool_cb(page):
 
         // Start processing layers
         handleLayers(OLMap.getLayers().getArray());
+        window.planesAreGood = function() {
+            for(plane in SelPlanes) {
+                if(SelPlanes[plane].trace == null) return false;
+            }
+            return true;
+        }
+
+        window.adjustViewSelectedPlanes = function () {
+            if (SelPlanes.length < 1) { return; }
+            let maxLat, maxLon, minLat, minLon = null;
+
+            console.log('minLon: ' + minLon);
+
+            for (let i in SelPlanes) {
+                let plane = SelPlanes[i];
+
+                if (!plane.position) { continue; }
+                const lat = plane.position[1];
+                const lon = plane.position[0];
+                console.log('pos: ' + lat + ', ' + lon);
+                if (minLon == null) {
+                    maxLat = minLat = lat;
+                    maxLon = minLon = lon;
+                    continue;
+                }
+                if (lat > maxLat) { maxLat = lat; };
+                if (lon > maxLon) { maxLon = lon; };
+
+                if (lat < minLat) { minLat = lat; };
+                if (lon < minLon) { minLon = lon; };
+            }
+            if (minLon == null) { return; }
+
+            console.log('max: ' + maxLat + ', ' + maxLon);
+            console.log('min: ' + minLat + ', ' + minLon);
+
+            let topRight = ol.proj.fromLonLat([maxLon, maxLat]);
+            let bottomLeft = ol.proj.fromLonLat([minLon, minLat]);
+
+            let newCenter = [(topRight[0] + bottomLeft[0]) / 2, (topRight[1] + bottomLeft[1]) / 2];
+            let longerSide = Math.max(Math.abs(topRight[0] - bottomLeft[0]), Math.abs(topRight[1] - bottomLeft[1]));
+
+            let newZoom = Math.floor(Math.log2(6e7 / longerSide));
+            console.log('newCenter: ' + newCenter);
+            console.log('newZoom: ' + newZoom);
+            window._alol_maploaded = false;
+            OLMap.getView().setCenter(newCenter);
+            OLMap.getView().setZoom(newZoom);
+            window._alol_viewadjusted = true;
+        }
+
+
+
     """
     tasks = [
         page.evaluate(
@@ -313,7 +369,6 @@ async def before_add_to_pool_cb(page):
         planespottersAPI=false; useRouteAPI=false; setPictureVisibility();
         OLMap.addEventListener("moveend", () => {window._alol_mapcentered = true;});
         OLMap.addEventListener("rendercomplete", () => {window._alol_maploaded = true;});
-        window._alol_mapcentered = false; window._alol_maploaded = false; window._are_tiles_loaded = false;
         """
         ),
         page.evaluate(js_magic),
@@ -330,8 +385,12 @@ async def before_add_to_pool_cb(page):
 async def before_return_to_pool_cb(page):
     await page.evaluate(
         """
-        reaper('all'); window._alol_mapcentered = false; window._alol_maploaded = false;
-        window._are_tiles_loaded = false;window._alol_loading = 0;window._alol_loaded = 0;
+        reaper('all');
+        window._alol_mapcentered = false;
+        window._alol_maploaded = false;
+        window._alol_viewadjusted = false;
+        window._are_tiles_loaded = false;
+        window._alol_loading = 0; window._alol_loaded = 0;
 
         """
     )
