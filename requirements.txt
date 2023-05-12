@@ -23,11 +23,14 @@ anyio==3.6.2
     #   watchfiles
 async-timeout==4.0.2
     # via
+    #   -r requirements.in
     #   aiohttp
     #   aioredis
     #   redis
 attrs==23.1.0
     # via aiohttp
+backoff==2.2.1
+    # via -r requirements.in
 cffi==1.15.1
     # via
     #   cryptography
@@ -72,7 +75,7 @@ multidict==6.0.4
     # via
     #   aiohttp
     #   yarl
-orjson==3.8.11
+orjson==3.8.12
     # via -r requirements.in
 pendulum==2.1.2
     # via fastapi-cache2
@@ -96,7 +99,7 @@ pytzdata==2020.1
     # via pendulum
 pyyaml==6.0
     # via uvicorn
-redis==4.5.4
+redis==4.5.5
     # via fastapi-cache2
 six==1.16.0
     # via python-dateutil
@@ -117,7 +120,7 @@ uvloop==0.17.0
     # via uvicorn
 watchfiles==0.19.0
     # via uvicorn
-websockets==11.0.2
+websockets==11.0.3
     # via uvicorn
 yarl==1.9.2
     # via aiohttp

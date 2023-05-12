@@ -180,13 +180,12 @@ class BrowserTabPool:
                 if not self.p:
                     self.p = await async_playwright().__aenter__()
                 if not self.browser or not self.browser.is_connected():
-                    self.browser = await self.p.chromium.connect_over_cdp(
-                        "ws://localhost:3000/?timeout=12000000"
-                    )
-                await self.initialize()
+                    await self.initialize()
             except Exception as e:
                 self.logger.error("Failed to reconcile browser. Reason: %s", e)
-                raise
+                self.browser = None
+                self.p = None
+                await self.initialize()
 
     async def _background_task_fn(self):
         try:
@@ -391,6 +390,5 @@ async def before_return_to_pool_cb(page):
         window._alol_viewadjusted = false;
         window._are_tiles_loaded = false;
         window._alol_loading = 0; window._alol_loaded = 0;
-
         """
     )

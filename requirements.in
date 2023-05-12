@@ -11,3 +11,5 @@ aioredis
 aiodns
 humanhash3
 playwright
+backoff
+async-timeout

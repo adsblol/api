@@ -62,9 +62,7 @@ async def get_new_screenshot(
     gs_zoom = get_map_zoom(gs)
     # for the cache key, cut off the to 2 decimal places
     icaos_str = ":".join(icaos)
-    cache_key = (
-        f"screenshot:{icaos_str}:{min_lat:.2f}:{min_lon:.2f}:{max_lat:.2f}:{max_lon:.2f}"
-    )
+    cache_key = f"screenshot:{icaos_str}:{min_lat:.1f}:{min_lon:.1f}:{max_lat:.1f}:{max_lon:.1f}"
 
     if not trace:
         if cached_screenshot := await redisVRS.redis.get(cache_key):
@@ -87,11 +85,11 @@ async def get_new_screenshot(
                 break
             else:
                 slept += 1
-                print(f"waiting for lock or screenshot {icao} {gs} {gs_zoom} {slept}")
+                print(f"waiting for lock or screenshot {icaos} {gs} {gs_zoom} {slept}")
                 await asyncio.sleep(1)
 
-        if screen := await redisVRS.redis.get(f"screenshot:{icao}:{gs}"):
-            print(f"cached! {icao} {gs} {gs_zoom}")
+        if screen := await redisVRS.redis.get(cache_key):
+            print(f"cached! {icao}")
             screen = base64.b64decode(screen)
             return Response(screen, media_type="image/png")
 
