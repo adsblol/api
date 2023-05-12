@@ -114,6 +114,8 @@ async def api_routeset(planeList: PlaneList):
     """
     #print(planeList)
     response = []
+    if len(planeList) > 100:
+        return Response(status_code=400)
     for plane in planeList.planes:
         route = await get_route_for_callsign_lat_lng(
             plane.callsign, plane.lat, plane.lng
