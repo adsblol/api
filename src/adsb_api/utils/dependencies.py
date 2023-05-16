@@ -8,7 +8,7 @@ provider = Provider(enabled_bg_tasks=ENABLED_BG_TASKS)
 redisVRS = RedisVRS()
 feederData = FeederData()
 browser = BrowserTabPool(
-    url="https://globe.adsb.lol/",
+    url="https://adsb.lol/",
     before_add_to_pool_cb=before_add_to_pool_cb,
     before_return_to_pool_cb=before_return_to_pool_cb,
 )
