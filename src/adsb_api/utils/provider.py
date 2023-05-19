@@ -13,6 +13,8 @@ import aiohttp
 import humanhash
 import orjson
 import redis.asyncio as redis
+from async_lru import alru_cache
+
 
 from adsb_api.utils.reapi import ReAPI
 from adsb_api.utils.settings import (
@@ -99,7 +101,7 @@ class Provider:
                         ) as resp:
                             data = await resp.json()
                             clients += data["clients"]
-                            #print(len(clients), "clients")
+                            # print(len(clients), "clients")
 
                         async with self.client_session.get(
                             url + "receivers.json"
@@ -226,7 +228,7 @@ class Provider:
 
         return sanitized_data
 
-    def get_clients_per_client_ip(self, ip: str, hide: bool= True) -> list:
+    def get_clients_per_client_ip(self, ip: str, hide: bool = True) -> list:
         """
         Return Beast clients with specified ip.
         :param ip: IP address to filter on.
@@ -234,7 +236,10 @@ class Provider:
         """
         ret = [client for client in self.beast_clients if client["ip"] == ip]
         if hide:
-            ret = [{k: v for k, v in client.items() if not k.startswith("_")} for client in ret]
+            ret = [
+                {k: v for k, v in client.items() if not k.startswith("_")}
+                for client in ret
+            ]
         return ret
 
     def get_clients_per_key_name(self, key_name: str, value: str) -> list:
@@ -271,7 +276,7 @@ class Provider:
         """
         if salt:
             original_uuid = self.salty_uuid(original_uuid, salt)
-        #print("humanhashy", original_uuid, salt)
+        # print("humanhashy", original_uuid, salt)
         return humanhash.humanize(original_uuid.replace("-", ""), words=words)
 
 
@@ -331,10 +336,11 @@ class RedisVRS:
         print(self.redis_connection_string)
         self.redis = await redis.from_url(self.redis_connection_string)
 
+    @alru_cache(maxsize=1024)
     async def get_route(self, callsign):
         vrsroute = await self.redis.get(f"vrs:route:{callsign}")
         if vrsroute is None:
-            #print("vrsx didn't have data on", callsign)
+            # print("vrsx didn't have data on", callsign)
             ret = {
                 "callsign": callsign,
                 "number": "unknown",
@@ -346,7 +352,7 @@ class RedisVRS:
             return ret
 
         data = vrsroute.decode()
-        #print("vrsx", callsign, data)
+        # print("vrsx", callsign, data)
         _, code, number, airlinecode, airportcodes = data.split(",")
         ret = {
             "callsign": callsign,
@@ -368,14 +374,16 @@ class RedisVRS:
                         airport, airport_data["iata"]
                     )
             ret["_airports"].append(airport_data)
+
         return ret
 
+    @alru_cache(maxsize=1024)
     async def get_airport(self, icao):
         data = await self.redis.get(f"vrs:airport:{icao}")
         if data is None:
             return None
         data = data.decode()
-        #print("vrsx", icao, data)
+        # print("vrsx", icao, data)
         try:
             __, name, _, iata, location, countryiso2, lat, lon, alt_feet = list(
                 csv.reader([data])
@@ -392,18 +400,20 @@ class RedisVRS:
                 "alt_meters": float(round(int(alt_feet) * 0.3048, 2)),
             }
         except:
-            #print(f"CSV-parsing: exception for {data}")
+            # print(f"CSV-parsing: exception for {data}")
             ret = None
         return ret
 
     # Add callsign to cache
-    async def set_plausible(self, callsign):
-        # set with expiry=1h
-        self.redis.set(f"vrs:plausible:{callsign}", 1, ex=3600)
+    async def set_plausible(self, callsign: str, valid: int):
+        expiry = 3600 if valid == 1 else 60
+        await self.redis.set(f"vrs:plausible:{callsign}", valid, ex=expiry)
 
     async def is_plausible(self, callsign):
-        # Check if callsign is plausible according to cache
-        return self.redis.get(f"vrs:plausible:{callsign}") is not None
+        cached = await self.redis.get(f"vrs:plausible:{callsign}")
+        if not cached:
+            return None
+        return int(cached.decode())
 
 
 class FeederData:
@@ -416,7 +426,6 @@ class FeederData:
         self.redis_aircrafts_updated_at = 0
         self.receivers_ingests_updated_at = 0
         self.ingest_aircrafts = {}
-        self.additional_receiver_params = {}
 
     async def connect(self):
         self.redis = await redis.from_url(self.redis_connection_string)
@@ -425,17 +434,6 @@ class FeederData:
             raise_for_status=True,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
-        await self._get_additional_receiver_params()
-
-    async def _get_additional_receiver_params(self):
-        # get https://globe.adsb.lol/data/receiver.json
-        async with self.client_session.get(
-            "https://globe.adsb.lol/data/receiver.json"
-        ) as resp:
-            data = await resp.json()
-            params = ["globeIndexGrid", "history", "refresh", "globeIndexSpecialTiles"]
-            for param in params:
-                self.additional_receiver_params[param] = data[param]
 
     async def shutdown(self):
         self.background_task.cancel()
@@ -446,7 +444,7 @@ class FeederData:
         self.redis_aircrafts_updated_at = datetime.now().timestamp()
         pipeline = self.redis.pipeline()
         aircrafts = self.ingest_aircrafts[ip]["aircraft"]
-        #print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
+        # print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
         for aircraft in aircrafts:
             pipeline = pipeline.set(
                 f"ac:{ip}:{aircraft['hex']}",
@@ -467,7 +465,7 @@ class FeederData:
         # We do this by exiting here if it has been updated recently
         if datetime.now().timestamp() - self.redis_aircrafts_updated_at > 0.5:
             self.redis_aircrafts_updated_at = datetime.now().timestamp()
-            #print("xxx trying to update redis aircrafts")
+            # print("xxx trying to update redis aircrafts")
             await self._update_redis_aircrafts(ip)
 
     async def _background_task(self):
@@ -500,10 +498,10 @@ class FeederData:
                     pipeline = self._try_updating_receivers_ingests(
                         pipeline, receivers_ingests
                     )
-                    #print("Pipeline: ", pipeline)
+                    # print("Pipeline: ", pipeline)
                     await pipeline.execute()
 
-                    #print("FeederData: Got data from", receivers, "receivers")
+                    # print("FeederData: Got data from", receivers, "receivers")
 
                     await asyncio.sleep(0.1)
 
@@ -544,7 +542,7 @@ class FeederData:
             int(datetime.now().timestamp()),
             byscore=True,
         )
-        #print("get_aircraft", receiver, data)
+        # print("get_aircraft", receiver, data)
         if not data:
             return None
         ret = []

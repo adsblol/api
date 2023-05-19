@@ -3,12 +3,13 @@ from adsb_api.utils.models import PrettyJSONResponse
 from adsb_api.utils.dependencies import redisVRS
 from adsb_api.utils.models import PlaneList
 from adsb_api.utils.plausible import plausible
+import asyncio
 
 CORS_HEADERS = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "access-control-allow-origin,content-type",
-    }
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "access-control-allow-origin,content-type",
+}
 
 
 router = APIRouter(
@@ -32,36 +33,33 @@ async def api_airport(icao: str):
 
 async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
     route = await redisVRS.get_route(callsign)
-    if route["airport_codes"] != "unknown":
-        a = 0
-        is_plausible = False
-        distance = 0
-        #print(f"==> {callsign}:", end=" ")
-        while a < len(route["_airports"]) - 1:
-            b = a + 1
-            airportA = route["_airports"][a]
-            airportB = route["_airports"][b]
-            #print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
-            is_plausible, distance = plausible(
-                lat,
-                lng,
-                f"{airportA['lat']:.5f}",
-                f"{airportA['lon']:.5f}",
-                f"{airportB['lat']:.5f}",
-                f"{airportB['lon']:.5f}",
-            )
-            if is_plausible:
-                redisVRS.set_plausible(callsign)
-                break
-            a = b  # try the next pair in mult segment routes
-
-        if not is_plausible:
-            #print(f"implausible {lat}/{lng} (dist {distance}nm)")
-            ...
-        else:
-            #print(" [ok]")
-            ...
+    is_plausible = await redisVRS.is_plausible(callsign)
+    if is_plausible:
         route["plausible"] = is_plausible
+        return route
+
+    if route["airport_codes"] == "unknown":
+        return route
+    a = 0
+    is_plausible = False
+    # print(f"==> {callsign}:", end=" ")
+    while a < len(route["_airports"]) - 1:
+        b = a + 1
+        airportA = route["_airports"][a]
+        airportB = route["_airports"][b]
+        # print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
+        is_plausible, _ = plausible(
+            lat,
+            lng,
+            f"{airportA['lat']:.5f}",
+            f"{airportA['lon']:.5f}",
+            f"{airportB['lat']:.5f}",
+            f"{airportB['lon']:.5f}",
+        )
+        a = b  # try the next pair in mult segment routes
+    print(f"==> {callsign} plausible: {is_plausible} {type(is_plausible)}")
+    await redisVRS.set_plausible(callsign, int(is_plausible))
+    route["plausible"] = is_plausible
     return route
 
 
@@ -112,16 +110,18 @@ async def api_routeset(planeList: PlaneList):
     """
     Return route information on a list of planes / positions
     """
-    #print(planeList)
+    # print(planeList)
     response = []
     if len(planeList.planes) > 100:
         return Response(status_code=400)
+    tasks = []
     for plane in planeList.planes:
-        route = await get_route_for_callsign_lat_lng(
-            plane.callsign, plane.lat, plane.lng
+        tasks.append(
+            get_route_for_callsign_lat_lng(plane.callsign, plane.lat, plane.lng)
         )
-        response.append(route)
+    response = [x for x in await asyncio.gather(*tasks)]
     return PrettyJSONResponse(content=response, headers=CORS_HEADERS)
+
 
 @router.options("/0/routeset")
 async def api_routeset_options():

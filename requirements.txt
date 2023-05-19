@@ -21,6 +21,8 @@ anyio==3.6.2
     # via
     #   starlette
     #   watchfiles
+async-lru==2.0.2
+    # via -r requirements.in
 async-timeout==4.0.2
     # via
     #   -r requirements.in
@@ -110,6 +112,7 @@ starlette==0.26.1
 typing-extensions==4.5.0
     # via
     #   aioredis
+    #   async-lru
     #   pydantic
     #   pyee
 uvicorn[standard]==0.22.0

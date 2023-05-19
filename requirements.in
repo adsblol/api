@@ -13,3 +13,4 @@ humanhash3
 playwright
 backoff
 async-timeout
+async_lru
