@@ -254,7 +254,7 @@ async def api_my(
             url="https://adsb.lol#sorry-but-i-could-not-find-your-receiver?"
         )
     for client in my_beast_clients:
-        uids.append(client["adsblol_my_hash"])
+        uids.append(client["adsblol_my_url"].split("https://")[1].split(".")[0])
     # redirect to
     # uid1_uid2.my.adsb.lol
     host = "https://" + "_".join(uids) + ".my.adsb.lol"
