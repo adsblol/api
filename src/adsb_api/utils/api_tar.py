@@ -50,21 +50,25 @@ async def get_new_screenshot(
 
     min_lat, min_lon, max_lat, max_lon = False, False, False, False
     # get the min and max lat/lon from re-api
-    with aiohttp.ClientSession() as session:
-        with await session.get(f"{REAPI_ENDPOINT}/?icao={','.join(icaos)}") as response:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{REAPI_ENDPOINT}/?find_hex={','.join(icaos)}") as response:
             data = await response.json()
             for aircraft in data["aircraft"]:
+                if not aircraft.get("lat") or not aircraft.get("lon"):
+                    continue
                 min_lat = min(min_lat, aircraft["lat"]) if min_lat else aircraft["lat"]
                 min_lon = min(min_lon, aircraft["lon"]) if min_lon else aircraft["lon"]
                 max_lat = max(max_lat, aircraft["lat"]) if max_lat else aircraft["lat"]
                 max_lon = max(max_lon, aircraft["lon"]) if max_lon else aircraft["lon"]
+    # if they are still not set, return 404. we can't get a fix, so we can't get a screenshot. sorry.
+    if not min_lat or not min_lon or not max_lat or not max_lon:
+        return Response(status_code=404)
     # make sure, in case of 1 aircraft, that we have a 1km box
     if len(icaos) == 1:
         min_lat, min_lon = min_lat - 0.005, min_lon - 0.005
         max_lat, max_lon = max_lat + 0.005, max_lon + 0.005
-    # for the cache key, cut off the to 2 decimal places
-    icaos_str = ":".join(icaos)
-    cache_key = f"screenshot:{icaos_str}"
+
+    cache_key = f"screenshot:{':'.join(icaos)}"
 
     if not trace:
         if cached_screenshot := await redisVRS.redis.get(cache_key):
