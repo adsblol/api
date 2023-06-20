@@ -1,31 +1,25 @@
 # Playwright API to get 256x256 screenshots of the ICAO
 # boom!
 
-from fastapi import APIRouter, Request
-from fastapi.responses import Response, FileResponse
-from fastapi_cache.decorator import cache
-from playwright.async_api import async_playwright
-from async_timeout import timeout
-
-from adsb_api.utils.dependencies import redisVRS, browser
-import traceback
-import time
 import asyncio
 import base64
+import time
+import traceback
+
+import aiohttp
+from async_timeout import timeout
+from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse, Response
+from fastapi_cache.decorator import cache
+from playwright.async_api import async_playwright
+
+from adsb_api.utils.dependencies import browser, redisVRS
+from adsb_api.utils.settings import REAPI_ENDPOINT
 
 router = APIRouter(
     prefix="/0",
     tags=["v0"],
 )
-
-
-def get_map_zoom(groundspeed):
-    if groundspeed <= 0:
-        return 6
-    zoom_levels = {300: 6, 200: 7, 175: 9, 150: 12, 125: 11, 75: 12, 50: 13, 0: 14}
-    for speed in sorted(zoom_levels.keys(), reverse=True):
-        if groundspeed >= speed:
-            return zoom_levels[speed]
 
 
 @router.get(
@@ -41,11 +35,6 @@ def get_map_zoom(groundspeed):
 async def get_new_screenshot(
     icao: str,
     trace: bool = False,
-    gs: float = 0.0,
-    min_lat: float = False,
-    min_lon: float = False,
-    max_lat: float = False,
-    max_lon: float = False,
 ) -> Response:
     icaos = icao.lower().split(",")
     for icao in icaos:
@@ -59,10 +48,23 @@ async def get_new_screenshot(
                 continue
         return Response(status_code=400)
 
-    gs_zoom = get_map_zoom(gs)
+    min_lat, min_lon, max_lat, max_lon = False, False, False, False
+    # get the min and max lat/lon from re-api
+    with aiohttp.ClientSession() as session:
+        with await session.get(f"{REAPI_ENDPOINT}/?icao={','.join(icaos)}") as response:
+            data = await response.json()
+            for aircraft in data["aircraft"]:
+                min_lat = min(min_lat, aircraft["lat"]) if min_lat else aircraft["lat"]
+                min_lon = min(min_lon, aircraft["lon"]) if min_lon else aircraft["lon"]
+                max_lat = max(max_lat, aircraft["lat"]) if max_lat else aircraft["lat"]
+                max_lon = max(max_lon, aircraft["lon"]) if max_lon else aircraft["lon"]
+    # make sure, in case of 1 aircraft, that we have a 1km box
+    if len(icaos) == 1:
+        min_lat, min_lon = min_lat - 0.005, min_lon - 0.005
+        max_lat, max_lon = max_lat + 0.005, max_lon + 0.005
     # for the cache key, cut off the to 2 decimal places
     icaos_str = ":".join(icaos)
-    cache_key = f"screenshot:{icaos_str}:{min_lat:.1f}:{min_lon:.1f}:{max_lat:.1f}:{max_lon:.1f}"
+    cache_key = f"screenshot:{icaos_str}"
 
     if not trace:
         if cached_screenshot := await redisVRS.redis.get(cache_key):
@@ -76,7 +78,7 @@ async def get_new_screenshot(
             lock = await redisVRS.redis.setnx(f"{cache_key}:lock", 1)
             if lock:
                 # set expiry
-                await redisVRS.redis.expire(f"{cache_key}:lock", 60)
+                await redisVRS.redis.expire(f"{cache_key}:lock", 10)
                 break
 
             screen = await redisVRS.redis.get(cache_key)
@@ -85,7 +87,7 @@ async def get_new_screenshot(
                 break
             else:
                 slept += 1
-                print(f"waiting for lock or screenshot {icaos} {gs} {gs_zoom} {slept}")
+                print(f"waiting for lock or screenshot {icaos} {slept}")
                 await asyncio.sleep(1)
 
         if screen := await redisVRS.redis.get(cache_key):
@@ -94,13 +96,7 @@ async def get_new_screenshot(
             return Response(screen, media_type="image/png")
 
     # otherwise, let's get to work
-    print(f"locked! {icao} {trace} {gs_zoom}")
-
-    # we want to set map zoom based on the groundspeed
-    # 0-100: 13
-    # 100-200: 10
-    # 200+: 7
-    # 300+: 5
+    print(f"locked! {icao} {trace}")
 
     # run this in asyncio-timeout context
     try:
