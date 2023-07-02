@@ -19,8 +19,7 @@ from adsb_api.utils.api_tar import router as tar_router
 from adsb_api.utils.api_v2 import router as v2_router
 from adsb_api.utils.dependencies import browser, feederData, provider, redisVRS
 from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
-from adsb_api.utils.settings import (INSECURE, REDIS_HOST, SALT_BEAST,
-                                     SALT_MLAT, SALT_MY)
+from adsb_api.utils.settings import INSECURE, REDIS_HOST, SALT_BEAST, SALT_MLAT, SALT_MY
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
@@ -132,6 +131,7 @@ async def shutdown_event():
     await redisVRS.shutdown()
     await browser.shutdown()
 
+
 @app.get("/api/0/receivers", response_class=PrettyJSONResponse, include_in_schema=False)
 async def receivers():
     return provider.beast_receivers
@@ -177,7 +177,12 @@ async def metrics():
     return Response(content="\n".join(metrics), media_type="text/plain")
 
 
-@app.get("/api/0/me", response_class=PrettyJSONResponse, tags=["v0"])
+@app.get(
+    "/api/0/me",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    summary="Information about your receiver and global stats",
+)
 async def api_me(
     x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
 ):
@@ -204,10 +209,16 @@ async def api_me(
     return response
 
 
-@app.get("/0/mylocalip/{ips}", response_class=PrettyJSONResponse, tags=["v0"])
+@app.get(
+    "/0/mylocalip/{ips}",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    include_in_schema=False,
+)
 async def mylocalip_put(
-    ips = str,
-    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
+    ips=str,
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
 ):
     client_ip = x_original_forwarded_for
     # ips can be separated by ,
@@ -218,10 +229,12 @@ async def mylocalip_put(
     await redisVRS.redis.setex("mylocalip:" + client_ip, 60, ",".join(ips))
     return {"success": True, "ips": ips}
 
-@app.get("/0/mylocalip", tags=["v0"])
+
+@app.get("/0/mylocalip", tags=["v0"], include_in_schema=False)
 async def mylocalip_get(
     request: Request,
-    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
 ):
     client_ip = x_original_forwarded_for
     # this is the page the user loads if they want to see their local IPs
@@ -242,7 +255,8 @@ async def mylocalip_get(
             "mylocalip.html", {"ips": [], "request": request}
         )
 
-@app.get("/api/0/my", tags=["v0"])
+
+@app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP")
 async def api_my(
     x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
 ):

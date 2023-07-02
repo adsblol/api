@@ -26,11 +26,13 @@ router = APIRouter(
     "/screenshot/",
     responses={200: {"content": {"image/png": {}}}},
     response_class=Response,
+    include_in_schema=False,
 )
 @router.get(
     "/screenshot/{icao}",
     responses={200: {"content": {"image/png": {}}}},
     response_class=Response,
+    include_in_schema=False,
 )
 async def get_new_screenshot(
     icao: str,
@@ -177,86 +179,4 @@ async def get_new_screenshot(
         traceback.print_exc()
         print(f"{icao} outer: {e}")
         await redisVRS.redis.delete(f"{cache_key}:lock")
-        return Response("sorry, no screenshots", media_type="text/plain")
-
-
-@router.get(
-    "/screenshot2/{icao}",
-    responses={200: {"content": {"image/png": {}}}},
-    response_class=Response,
-)
-async def get_new_screenshot2(
-    icao: str,
-    trace: bool = False,
-    gs: float = 0.0,
-    min_lat: float = False,
-    min_lon: float = False,
-    max_lat: float = False,
-    max_lon: float = False,
-) -> Response:
-    icaos = icao.lower().split(",")
-    for icao in icaos:
-        if len(icao) == 6:
-            if all(c in "0123456789abcdef" for c in icao):
-                continue
-        elif len(icao) == 7:
-            if icao[0] != "~":
-                return Response(status_code=400)
-            if all(c in "0123456789abcdef" for c in icao[1:]):
-                continue
-        return Response(status_code=400)
-
-    try:
-        async with browser.get_tab() as tab:
-            async with timeout(10):
-                if trace:
-                    await tab.context.tracing.start(screenshots=True, snapshots=True)
-                try:
-                    start_js = "window._alol_mapcentered = false;window._alol_maploaded = false;window._alol_viewadjusted = false;window._are_tiles_loaded = false;window._alol_loading = 0; window._alol_loaded = 0;window._alol_viewadjusted=false;"
-                    other_planes_js = "".join(
-                        [
-                            f'selectPlaneByHex("{icao}", {{noDeselect: true}});'
-                            for icao in icaos
-                        ]
-                    )
-                    if min_lat and min_lon and max_lat and max_lon:
-                        # function adjustViewSelectedPlanes(maxLat, maxLon, minLat, minLon) {
-                        other_planes_js += f"""
-                            window.adjustViewSelectedPlanes();
-                        """
-                    else:
-                        other_planes_js += "window._alol_viewadjusted = true;"
-                    print(f"js: {start_js + other_planes_js}")
-                    await tab.evaluate(start_js + other_planes_js)
-
-                    # wait ...
-
-                    try:
-                        await tab.wait_for_function(
-                            f"""
-                            window._alol_maploaded === true &&
-                            window._alol_mapcentered === true &&
-                            window._are_tiles_loaded === true &&
-                            window._alol_viewadjusted === true &&
-                            window.planesAreGood()
-                            """,
-                            timeout=10000,
-                            polling=25,
-                        )
-                    except Exception as e:
-                        traceback.print_exc()
-                        print(f"{icao} waiting: {e}")
-                except Exception as e:
-                    traceback.print_exc()
-                    print(f"{icao} inner: {e}")
-                screenshot = await tab.screenshot(type="png")
-                if trace:
-                    await tab.context.tracing.stop(path=f"/tmp/trace-{icao}.zip")
-                    return FileResponse(
-                        f"/tmp/trace-{icao}.zip", media_type="application/zip"
-                    )
-                return Response(screenshot, media_type="image/png")
-    except Exception as e:
-        traceback.print_exc()
-        print(f"{icao} outer: {e}")
         return Response("sorry, no screenshots", media_type="text/plain")

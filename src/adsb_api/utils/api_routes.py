@@ -22,6 +22,7 @@ router = APIRouter(
     "/0/airport/{icao}",
     response_class=PrettyJSONResponse,
     tags=["v0"],
+    summary="Airports by ICAO",
     description="Data by https://github.com/vradarserver/standing-data/",
 )
 async def api_airport(icao: str):
@@ -67,6 +68,7 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
     "/0/route/{callsign}/{lat}/{lng}",
     response_class=PrettyJSONResponse,
     tags=["v0"],
+    summary="Route plus plausible flag for a specific callsign and position",
     description="Data by https://github.com/vradarserver/standing-data/",
 )
 async def api_route3(
@@ -87,6 +89,7 @@ async def api_route3(
     "/0/route/{callsign}",
     response_class=PrettyJSONResponse,
     tags=["v0"],
+    summary="Route for a specific callsign",
     description="Data by https://github.com/vradarserver/standing-data/",
 )
 async def api_route(
@@ -103,6 +106,7 @@ async def api_route(
     "/0/routeset",
     response_class=PrettyJSONResponse,
     tags=["v0"],
+    sumary="Routes for a list of aircraft callsigns",
     description="""Look up routes for multiple planes at once.
     Data by https://github.com/vradarserver/standing-data/""",
 )
@@ -123,6 +127,6 @@ async def api_routeset(planeList: PlaneList):
     return PrettyJSONResponse(content=response, headers=CORS_HEADERS)
 
 
-@router.options("/0/routeset")
+@router.options("/0/routeset", include_in_schema=False)
 async def api_routeset_options():
     return Response(status_code=200, headers=CORS_HEADERS)
