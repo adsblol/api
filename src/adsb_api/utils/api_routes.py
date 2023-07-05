@@ -106,7 +106,7 @@ async def api_route(
     "/0/routeset",
     response_class=PrettyJSONResponse,
     tags=["v0"],
-    sumary="Routes for a list of aircraft callsigns",
+    summary="Routes for a list of aircraft callsigns",
     description="""Look up routes for multiple planes at once.
     Data by https://github.com/vradarserver/standing-data/""",
 )
