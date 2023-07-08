@@ -17,11 +17,13 @@ aioredis==2.0.1
     # via -r requirements.in
 aiosignal==1.3.1
     # via aiohttp
-anyio==3.7.0
+annotated-types==0.5.0
+    # via pydantic
+anyio==3.7.1
     # via
     #   starlette
     #   watchfiles
-async-lru==2.0.2
+async-lru==2.0.3
     # via -r requirements.in
 async-timeout==4.0.2
     # via
@@ -36,13 +38,13 @@ cffi==1.15.1
     # via
     #   cryptography
     #   pycares
-charset-normalizer==3.1.0
+charset-normalizer==3.2.0
     # via aiohttp
-click==8.1.3
+click==8.1.4
     # via uvicorn
 cryptography==41.0.1
     # via pyopenssl
-fastapi==0.97.0
+fastapi==0.100.0
     # via
     #   -r requirements.in
     #   fastapi-cache2
@@ -56,11 +58,11 @@ greenlet==2.0.2
     # via playwright
 h11==0.14.0
     # via uvicorn
-httptools==0.5.0
+httptools==0.6.0
     # via uvicorn
 humanhash3==0.0.6
     # via -r requirements.in
-humanize==4.6.0
+humanize==4.7.0
     # via -r requirements.in
 idna==3.4
     # via
@@ -76,7 +78,7 @@ multidict==6.0.4
     # via
     #   aiohttp
     #   yarl
-orjson==3.9.1
+orjson==3.9.2
     # via -r requirements.in
 pendulum==2.1.2
     # via fastapi-cache2
@@ -86,8 +88,10 @@ pycares==4.3.0
     # via aiodns
 pycparser==2.21
     # via cffi
-pydantic==1.10.9
+pydantic==2.0.2
     # via fastapi
+pydantic-core==2.1.2
+    # via pydantic
 pyee==9.0.4
     # via playwright
 pyopenssl==23.2.0
@@ -100,7 +104,7 @@ pytzdata==2020.1
     # via pendulum
 pyyaml==6.0
     # via uvicorn
-redis==4.5.5
+redis==4.6.0
     # via fastapi-cache2
 six==1.16.0
     # via python-dateutil
@@ -108,11 +112,12 @@ sniffio==1.3.0
     # via anyio
 starlette==0.27.0
     # via fastapi
-typing-extensions==4.6.3
+typing-extensions==4.7.1
     # via
     #   aioredis
-    #   async-lru
+    #   fastapi
     #   pydantic
+    #   pydantic-core
     #   pyee
 uvicorn[standard]==0.22.0
     # via
