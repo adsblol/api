@@ -100,8 +100,8 @@ class V2Response_Model(BaseModel):
 
 class PlaneInstance(BaseModel):
     callsign: str
-    lat: str
-    lng: str
+    lat: float
+    lng: float
 
 
 class PlaneList(BaseModel):
