@@ -1,9 +1,11 @@
+import ipaddress
 import pathlib
 import secrets
 import time
 import traceback
 import uuid
-import ipaddress
+
+import aiohttp
 import orjson
 from fastapi import FastAPI, Header, Request
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -340,6 +342,62 @@ async def aircraft_json(
         "messages": 0,
         "aircraft": ac,
     }
+
+
+# An API 1:1 caching https://api.planespotters.net/pub/photos/hex/<hex> for 1h
+# Watch out! It passes also ?icaoType and ?reg to the API
+
+
+@app.get(
+    "/0/planespotters_net/hex/{hex}",
+    response_class=PrettyJSONResponse,
+    include_in_schema=False,
+    tags=["v0"],
+)
+async def planespotters_net_hex(
+    hex: str,
+    reg: str = "",
+    icaoType: str = "",
+):
+    # make a params out of the query params
+    params = {"icaoType": icaoType, "reg": reg}
+    redis_key = f"planespotters_net_hex:{hex}:{icaoType}:{reg}"
+    # check if we have a cached response
+
+    if cache := await redisVRS.redis.get(redis_key):
+        # return the cached response
+        return orjson.loads(cache)
+    # if not, query the API
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"https://api.planespotters.net/pub/photos/hex/{hex}",
+            params=params,
+        ) as response:
+            if response.status == 200:
+                # cache the response for 1h
+                data = await response.json()
+                await redisVRS.redis.setex(redis_key, 3600, orjson.dumps(data))
+                res = data
+            else:
+                res = {"error": "not found"}
+    return PrettyJSONResponse(
+        content=res,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+@app.options("/0/planespotters_net/hex/{hex}", include_in_schema=False)
+async def planespotters_net_hex_options():
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        },
+    )
 
 
 if __name__ == "__main__":
