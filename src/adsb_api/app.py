@@ -176,7 +176,15 @@ async def metrics():
     metrics = [
         "adsb_api_beast_total_receivers {}".format(len(provider.beast_receivers)),
         "adsb_api_beast_total_clients {}".format(len(provider.beast_clients)),
-        "adsb_api_mlat_total {}".format(len(provider.mlat_sync_json)),
+        #"adsb_api_mlat_total {}".format(len(provider.mlat_sync_json)),
+        # new format is {'0a': {clients}, '0b': {clients}}
+        # so let's make tag for each server
+        *[
+            "adsb_api_mlat_total{{server=\"{0}\"}} {1}".format(
+                server, len(clients)
+            )
+            for server, clients in provider.mlat_clients.items()
+        ],
         "adsb_api_aircraft_total {}".format(provider.aircraft_totalcount),
     ]
     return Response(content="\n".join(metrics), media_type="text/plain")
