@@ -6,7 +6,7 @@
 #
 aiodns==3.0.0
     # via -r requirements.in
-aiohttp==3.8.4
+aiohttp==3.8.5
     # via
     #   -r requirements.in
     #   aiohttp-jinja2
@@ -40,7 +40,7 @@ cffi==1.15.1
     #   pycares
 charset-normalizer==3.2.0
     # via aiohttp
-click==8.1.4
+click==8.1.6
     # via uvicorn
 cryptography==41.0.2
     # via pyopenssl
@@ -50,7 +50,7 @@ fastapi==0.100.0
     #   fastapi-cache2
 fastapi-cache2[redis]==0.2.1
     # via -r requirements.in
-frozenlist==1.3.3
+frozenlist==1.4.0
     # via
     #   aiohttp
     #   aiosignal
@@ -82,15 +82,15 @@ orjson==3.9.2
     # via -r requirements.in
 pendulum==2.1.2
     # via fastapi-cache2
-playwright==1.35.0
+playwright==1.36.0
     # via -r requirements.in
 pycares==4.3.0
     # via aiodns
 pycparser==2.21
     # via cffi
-pydantic==2.0.2
+pydantic==2.0.3
     # via fastapi
-pydantic-core==2.1.2
+pydantic-core==2.3.0
     # via pydantic
 pyee==9.0.4
     # via playwright
@@ -102,7 +102,7 @@ python-dotenv==1.0.0
     # via uvicorn
 pytzdata==2020.1
     # via pendulum
-pyyaml==6.0
+pyyaml==6.0.1
     # via uvicorn
 redis==4.6.0
     # via fastapi-cache2
@@ -119,7 +119,7 @@ typing-extensions==4.7.1
     #   pydantic
     #   pydantic-core
     #   pyee
-uvicorn[standard]==0.22.0
+uvicorn[standard]==0.23.1
     # via
     #   -r requirements.in
     #   fastapi-cache2
