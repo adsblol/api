@@ -196,7 +196,7 @@ async def api_me(
     mlat_clients = provider.mlat_clients_to_list(client_ip)
 
     # count all items as mlat_clients format is {'0a': {clients}, '0b': {clients}}
-    all_mlat_clients = sum([len(i) for i in mlat_clients.values()])
+    all_mlat_clients = sum([len(i) for i in self.mlat_clients.values()])
     response = {
         "feeding": {
             "beast": len(my_beast_clients) > 0,
