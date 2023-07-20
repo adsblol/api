@@ -194,6 +194,9 @@ async def api_me(
     client_ip = x_original_forwarded_for
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     mlat_clients = provider.mlat_clients_to_list(client_ip)
+
+    # count all items as mlat_clients format is {'0a': {clients}, '0b': {clients}}
+    all_mlat_clients = sum([len(i) for i in mlat_clients.values()])
     response = {
         "feeding": {
             "beast": len(my_beast_clients) > 0,
@@ -206,7 +209,7 @@ async def api_me(
         "client_ip": client_ip,
         "global": {
             "beast": len(provider.beast_clients),
-            "mlat": len(provider.mlat_clients),
+            "mlat": all_mlat_clients,
             "planes": provider.aircraft_totalcount,
         },
     }
