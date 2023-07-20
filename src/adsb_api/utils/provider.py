@@ -155,13 +155,15 @@ class Provider:
                         self.mlat_totalcount_json[this] = len(data)
 
                     # now, we take care of the clients
-                    SENSITIVE_clients = []
+                    SENSITIVE_clients = {}
+                    # we put for each server the clients
                     for server in MLAT_SERVERS:
+                        this = server.split("-")[-1].upper()
                         async with self.client_session.get(
                             f"http://{server}:150/clients.json"
                         ) as resp:
                             data = await resp.json()
-                            SENSITIVE_clients += data
+                            SENSITIVE_clients[this] = data
                     self.mlat_clients = SENSITIVE_clients
 
                     await asyncio.sleep(5)
@@ -219,12 +221,15 @@ class Provider:
             "bad_sync_timeout",
             "outlier_percent",
         ]
-
-        for name, client in self.mlat_clients.items():
-            if ip is not None and client["source_ip"] == ip:
-                clients_list.append(
-                    {key: client[key] for key in keys_to_copy if key in client}
-                )
+        # format of mlat_clients:
+        # { "0A": {"user": {data}}, "0B": {"user": {data}}
+        for server, data in self.mlat_clients.items():
+        #for name, client in self.mlat_clients.items():
+            for name, client in data.items():
+                if ip is not None and client["source_ip"] == ip:
+                    clients_list.append(
+                        {key: client[key] for key in keys_to_copy if key in client}
+                    )
 
         return clients_list
 
