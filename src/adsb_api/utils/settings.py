@@ -18,3 +18,8 @@ STATS_URL = os.getenv("ADSBLOL_STATS_URL", "http://hub-readsb-green:150/stats.js
 ENABLED_BG_TASKS = os.getenv(
     "ADSBLOL_ENABLED_BG_TASKS", "fetch_hub_stats,fetch_ingest,fetch_mlat"
 ).split(",")
+
+MLAT_SERVERS = os.getenv(
+    "ADSBLOL_MLAT_SERVERS",
+    "mlat-mlat-server-0a,mlat-mlat-server-0b,mlat-mlat-server-0c",
+).split(",")

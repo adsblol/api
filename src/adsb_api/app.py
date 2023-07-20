@@ -140,12 +140,15 @@ async def receivers():
 
 
 @app.get(
-    "/api/0/mlat-server/0A/sync.json",
+    "/api/0/mlat-server/{server}/sync.json",
     response_class=PrettyJSONResponse,
     include_in_schema=False,
 )
-async def mlat_receivers():
-    return provider.mlat_sync_json
+async def mlat_receivers(server: str):
+    if server not in provider.mlat_sync_json.keys():
+        return {"error": "not found"}
+
+    return provider.mlat_sync_json[server]
 
 
 @app.get(

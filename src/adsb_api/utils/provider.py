@@ -24,6 +24,7 @@ from adsb_api.utils.settings import (
     SALT_MLAT,
     SALT_MY,
     STATS_URL,
+    MLAT_SERVERS,
 )
 
 
@@ -137,20 +138,31 @@ class Provider:
         try:
             while True:
                 try:
-                    async with self.client_session.get(
-                        "http://mlat-mlat-server:150/sync.json"
-                    ) as resp:
-                        data = await resp.json()
-                    self.mlat_sync_json = self.anonymize_mlat_data(data)
+                    data_per_server = {}
+                    for server in MLAT_SERVERS:
+                        # server is "mlat-mlat-server-0a"
+                        # let's take just 0a and make it uppercase
+                        this = server.split("-")[-1].upper()
+                        async with self.client_session.get(
+                            f"http://{server}:150/sync.json"
+                        ) as resp:
+                            data_per_server[this] = self.anonymize_mlat_data(await resp.json())
                     self.mlat_totalcount_json = {
-                        "0A": len(self.mlat_sync_json),
                         "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
                     }
-                    async with self.client_session.get(
-                        "http://mlat-mlat-server:150/clients.json"
-                    ) as resp:
-                        data = await resp.json()
-                    self.mlat_clients = data
+                    for this, data in data_per_server.items():
+                        self.mlat_sync_json[this] = data
+                        self.mlat_totalcount_json[this] = len(data)
+
+                    # now, we take care of the clients
+                    SENSITIVE_clients = []
+                    for server in MLAT_SERVERS:
+                        async with self.client_session.get(
+                            f"http://{server}:150/clients.json"
+                        ) as resp:
+                            data = await resp.json()
+                            SENSITIVE_clients += data
+                    self.mlat_clients = SENSITIVE_clients
 
                     await asyncio.sleep(5)
                 except Exception as e:
@@ -165,7 +177,9 @@ class Provider:
         clients = {}
 
         for client in client_rows:
-            my_url = "https://" + self._humanhashy(client[0][:18], SALT_MY) + ".my.adsb.lol"
+            my_url = (
+                "https://" + self._humanhashy(client[0][:18], SALT_MY) + ".my.adsb.lol"
+            )
             clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
                 # "adsblol_beast_id": self.salty_uuid(client[0], SALT_BEAST),
                 # "adsblol_beast_hash": self._humanhashy(client[0], SALT_BEAST),
