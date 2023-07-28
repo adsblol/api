@@ -34,10 +34,15 @@ You can use the API by sending a GET request
 to the endpoint you want to use.
 The API will return a JSON response.
 
+## Feeders
+
+By sending data to adsb.lol, you get access to the
+[direct readsb re-api](https://www.adsb.lol/docs/feeders-only/re-api/)
+and
+[our raw aggregated data](https://www.adsb.lol/docs/feeders-only/beast-mlat-out/). :)
+
 ## Terms of Service
 You can use the API for free.
-
-In the future, I might add a rate limit to the API.
 
 In the future, you will require an API key
 which you can get by feeding to adsb.lol.
@@ -57,7 +62,7 @@ This is the same license
 app = FastAPI(
     title="adsb.lol API",
     description=description,
-    version="0.0.1",
+    version="0.0.2",
     docs_url=None,
     redoc_url=None,
     openapi_url="/api/openapi.json",
