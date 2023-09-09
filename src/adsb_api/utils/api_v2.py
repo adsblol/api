@@ -194,9 +194,9 @@ async def v2_callsign_filter(
 )
 @cache(expire=REDIS_TTL)
 async def v2_point(
-    lat: float = Path(..., example=40.78),
-    lon: float = Path(..., example=73.97),
-    radius: int = Path(..., example=250),
+    lat: float = Path(..., example=51.89508, ge=-90, le=90),
+    lon: float = Path(..., example=2.79437, ge=-180, le=180),
+    radius: int = Path(..., example=250, ge=0, le=250),
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
@@ -213,12 +213,12 @@ async def v2_point(
     "/closest/{lat}/{lon}/{radius}",
     response_class=ORJSONResponse,
     summary="Single aircraft closest to a point (lat, lon)",
-    description="Returns the closest aircraft to a point described by the latitude and longtidude within a radius.",
+    description="Returns the closest aircraft to a point described by the latitude and longtidude within a radius up to 250nm.",
 )
 async def v2_closest(
-    lat: float = Path(..., example=40.78),
-    lon: float = Path(..., example=73.97),
-    radius: int = Path(..., example=250),
+    lat: float = Path(..., example=51.89508, ge=-90, le=90),
+    lon: float = Path(..., example=2.79437, ge=-180, le=180),
+    radius: int = Path(..., example=250, ge=0, le=250),
     x_original_forwarded_for: str
     | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
