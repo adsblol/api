@@ -207,3 +207,24 @@ async def v2_point(
         params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip
     )
     return res
+
+# closest
+@router.get(
+    "/closest/{lat}/{lon}/{radius}",
+    response_class=ORJSONResponse,
+    summary="Single aircraft closest to a point (lat, lon)",
+    description="Returns the closest aircraft to a point described by the latitude and longtidude within a radius.",
+)
+async def v2_closest(
+    lat: float = Path(..., example=40.78),
+    lon: float = Path(..., example=73.97),
+    radius: int = Path(..., example=250),
+    x_original_forwarded_for: str
+    | None = Header(default=None, include_in_schema=False),
+) -> V2Response_Model:
+    client_ip = x_original_forwarded_for
+
+    res = await provider.ReAPI.request(
+        params=[f"closest={lat},{lon},{radius}"], client_ip=client_ip
+    )
+    return res
