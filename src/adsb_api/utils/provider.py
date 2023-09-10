@@ -185,7 +185,7 @@ class Provider:
             clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
                 # "adsblol_beast_id": self.salty_uuid(client[0], SALT_BEAST),
                 # "adsblol_beast_hash": self._humanhashy(client[0], SALT_BEAST),
-                "_hex": client[0],
+                "uuid": client[0][:13] + "-...",
                 "adsblol_my_url": my_url,
                 "ip": client[1].split()[1],
                 "kbps": client[2],
