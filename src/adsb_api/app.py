@@ -149,7 +149,15 @@ async def receivers():
     response_class=PrettyJSONResponse,
     include_in_schema=False,
 )
-async def mlat_receivers(server: str):
+async def mlat_receivers(
+    server: str,
+    host: str | None = Header(default=None, include_in_schema=False),
+):
+    # if the host is not mlat.adsb.lol,
+    # return a 404
+    if host != "mlat.adsb.lol":
+        return {"error": "not found"}
+
     if server not in provider.mlat_sync_json.keys():
         return {"error": "not found"}
 
@@ -181,13 +189,11 @@ async def metrics():
     metrics = [
         "adsb_api_beast_total_receivers {}".format(len(provider.beast_receivers)),
         "adsb_api_beast_total_clients {}".format(len(provider.beast_clients)),
-        #"adsb_api_mlat_total {}".format(len(provider.mlat_sync_json)),
+        # "adsb_api_mlat_total {}".format(len(provider.mlat_sync_json)),
         # new format is {'0a': {clients}, '0b': {clients}}
         # so let's make tag for each server
         *[
-            "adsb_api_mlat_total{{server=\"{0}\"}} {1}".format(
-                server, len(clients)
-            )
+            'adsb_api_mlat_total{{server="{0}"}} {1}'.format(server, len(clients))
             for server, clients in provider.mlat_clients.items()
         ],
         "adsb_api_aircraft_total {}".format(provider.aircraft_totalcount),
