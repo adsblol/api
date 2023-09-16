@@ -139,11 +139,6 @@ async def shutdown_event():
     await browser.shutdown()
 
 
-@app.get("/api/0/receivers", response_class=PrettyJSONResponse, include_in_schema=False)
-async def receivers():
-    return provider.beast_receivers
-
-
 @app.get(
     "/api/0/mlat-server/{server}/sync.json",
     response_class=PrettyJSONResponse,
