@@ -260,6 +260,8 @@ class Provider:
                 {k: v for k, v in client.items() if not k.startswith("_")}
                 for client in ret
             ]
+            # sort by uuid
+            ret.sort(key=lambda x: x["uuid"])
         return ret
 
     def get_clients_per_key_name(self, key_name: str, value: str) -> list:
