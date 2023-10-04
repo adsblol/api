@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Header, Path
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import Response
 from fastapi_cache.decorator import cache
-from adsb_api.utils.settings import REDIS_TTL
+
 from adsb_api.utils.dependencies import provider
 from adsb_api.utils.models import V2Response_Model
+from adsb_api.utils.settings import REDIS_TTL
 
 router = APIRouter(
     prefix="/v2",
@@ -14,7 +15,6 @@ router = APIRouter(
 
 @router.get(
     "/pia",
-    response_class=ORJSONResponse,
     summary="Aircrafts with PIA addresses (Privacy ICAO Address)",
     description="Returns all aircraft with [PIA](https://nbaa.org/aircraft-operations/security/privacy/privacy-icao-address-pia/) addresses.",
 )
@@ -27,12 +27,11 @@ async def v2_pia(
     params = ["all", "filter_pia"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/mil",
-    response_class=ORJSONResponse,
     summary="Military registered aircrafts",
     description="Returns all military registered aircraft.",
 )
@@ -45,12 +44,11 @@ async def v2_mil(
     params = ["all", "filter_mil"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/ladd",
-    response_class=ORJSONResponse,
     summary="Aircrafts on LADD (Limiting Aircraft Data Displayed)",
     description="Returns all aircrafts on [LADD](https://www.faa.gov/pilots/ladd) filter.",
 )
@@ -63,18 +61,16 @@ async def v2_ladd(
     params = ["all", "filter_ladd"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/squawk/{squawk}",
-    response_class=ORJSONResponse,
     summary="Aircrafts with specific squawk (1200, 7700, etc.)",
     description='Returns aircraft filtered by "squawk" [transponder code](https://en.wikipedia.org/wiki/List_of_transponder_codes).',
 )
 @router.get(
     "/sqk/{squawk}",
-    response_class=ORJSONResponse,
     summary="Aircrafts with specific squawk (1200, 7700, etc.)",
     description='Returns aircraft filtered by "squawk" [transponder code](https://en.wikipedia.org/wiki/List_of_transponder_codes).',
 )
@@ -89,12 +85,11 @@ async def v2_squawk_filter(
     params = ["all", f"filter_squawk={squawk}"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/type/{aircraft_type}",
-    response_class=ORJSONResponse,
     summary="Aircrafts of specific type (A320, B738)",
     description="Returns aircraft filtered by [aircraft type designator code](https://en.wikipedia.org/wiki/List_of_aircraft_type_designators).",
 )
@@ -108,18 +103,16 @@ async def v2_type_filter(
     params = [f"find_type={aircraft_type}"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/registration/{registration}",
-    response_class=ORJSONResponse,
     summary="Aircrafts with specific registration (G-KELS)",
     description="Returns aircraft filtered by [aircarft registration code](https://en.wikipedia.org/wiki/Aircraft_registration).",
 )
 @router.get(
     "/reg/{registration}",
-    response_class=ORJSONResponse,
     summary="Aircrafts with specific registration (G-KELS)",
     description="Returns aircraft filtered by [aircarft registration code](https://en.wikipedia.org/wiki/Aircraft_registration).",
 )
@@ -133,18 +126,16 @@ async def v2_reg_filter(
     params = [f"find_reg={registration}"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/hex/{icao_hex}",
-    response_class=ORJSONResponse,
     summary="Aircrafts with specific transponder hex code (4CA87C)",
     description="Returns aircraft filtered by [transponder hex code](https://en.wikipedia.org/wiki/Aviation_transponder_interrogation_modes#ICAO_24-bit_address).",
 )
 @router.get(
     "/icao/{icao_hex}",
-    response_class=ORJSONResponse,
     summary="Aircrafts with specific transponder hex code (4CA87C)",
     description="Returns aircraft filtered by [transponder hex code](https://en.wikipedia.org/wiki/Aviation_transponder_interrogation_modes#ICAO_24-bit_address).",
 )
@@ -158,12 +149,11 @@ async def v2_hex_filter(
     params = [f"find_hex={icao_hex}"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/callsign/{callsign}",
-    response_class=ORJSONResponse,
     summary="Aircrafts with specific callsign (JBU1942)",
     description="Returns aircraft filtered by [callsign](https://en.wikipedia.org/wiki/Aviation_call_signs).",
 )
@@ -177,18 +167,16 @@ async def v2_callsign_filter(
     params = [f"find_callsign={callsign}"]
 
     res = await provider.ReAPI.request(params=params, client_ip=client_ip)
-    return res
+    return Response(res, media_type="application/json")
 
 
 @router.get(
     "/point/{lat}/{lon}/{radius}",
-    response_class=ORJSONResponse,
     summary="Aircrafts surrounding a point (lat, lon) up to 250nm",
     description="Returns aircraft located in a circle described by the latitude and longtidude of its center and its radius.",
 )
 @router.get(
     "/lat/{lat}/lon/{lon}/dist/{radius}",
-    response_class=ORJSONResponse,
     summary="Aircrafts surrounding a point (lat, lon) up to 250nm",
     description="Returns aircraft located in a circle described by the latitude and longtidude of its center and its radius.",
 )
@@ -206,12 +194,12 @@ async def v2_point(
     res = await provider.ReAPI.request(
         params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip
     )
-    return res
+    return Response(res, media_type="application/json")
+
 
 # closest
 @router.get(
     "/closest/{lat}/{lon}/{radius}",
-    response_class=ORJSONResponse,
     summary="Single aircraft closest to a point (lat, lon)",
     description="Returns the closest aircraft to a point described by the latitude and longtidude within a radius up to 250nm.",
 )
@@ -227,4 +215,4 @@ async def v2_closest(
     res = await provider.ReAPI.request(
         params=[f"closest={lat},{lon},{radius}"], client_ip=client_ip
     )
-    return res
+    return Response(res, media_type="application/json")
