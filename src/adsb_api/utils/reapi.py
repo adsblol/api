@@ -31,7 +31,7 @@ class ReAPI:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as response:
                 response.raise_for_status()
-                return orjson.loads((await response.text()))
+                return await response.text()
 
 
 if __name__ == "__main__":
