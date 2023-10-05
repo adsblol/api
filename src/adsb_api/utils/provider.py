@@ -146,7 +146,9 @@ class Provider:
                         async with self.client_session.get(
                             f"http://{server}:150/sync.json"
                         ) as resp:
-                            data_per_server[this] = self.anonymize_mlat_data(await resp.json())
+                            data_per_server[this] = self.anonymize_mlat_data(
+                                await resp.json()
+                            )
                     self.mlat_totalcount_json = {
                         "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
                     }
@@ -224,7 +226,7 @@ class Provider:
         # format of mlat_clients:
         # { "0A": {"user": {data}}, "0B": {"user": {data}}
         for server, data in self.mlat_clients.items():
-        #for name, client in self.mlat_clients.items():
+            # for name, client in self.mlat_clients.items():
             for name, client in data.items():
                 if ip is not None and client["source_ip"] == ip:
                     clients_list.append(

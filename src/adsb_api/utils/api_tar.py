@@ -53,7 +53,9 @@ async def get_new_screenshot(
     min_lat, min_lon, max_lat, max_lon = False, False, False, False
     # get the min and max lat/lon from re-api
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"{REAPI_ENDPOINT}/?find_hex={','.join(icaos)}") as response:
+        async with session.get(
+            f"{REAPI_ENDPOINT}/?find_hex={','.join(icaos)}"
+        ) as response:
             data = await response.json()
             for aircraft in data["aircraft"]:
                 if not aircraft.get("lat") or not aircraft.get("lon"):

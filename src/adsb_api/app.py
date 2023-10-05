@@ -202,10 +202,8 @@ async def metrics():
     tags=["v0"],
     summary="Information about your receiver and global stats",
 )
-async def api_me(
-    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
-):
-    client_ip = x_original_forwarded_for
+async def api_me(request: Request):
+    client_ip = request.client.host
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     mlat_clients = provider.mlat_clients_to_list(client_ip)
 
@@ -231,58 +229,9 @@ async def api_me(
     return response
 
 
-@app.get(
-    "/0/mylocalip/{ips}",
-    response_class=PrettyJSONResponse,
-    tags=["v0"],
-    include_in_schema=False,
-)
-async def mylocalip_put(
-    ips=str,
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
-):
-    client_ip = x_original_forwarded_for
-    # ips can be separated by ,
-    # ensure each IP is also somewhat valid.
-    ips = [ip for ip in ips.split(",") if ipaddress.ip_address(ip)]
-    if not ips:
-        return {"error": "no valid IPs found"}
-    await redisVRS.redis.setex("mylocalip:" + client_ip, 60, ",".join(ips))
-    return {"success": True, "ips": ips}
-
-
-@app.get("/0/mylocalip", tags=["v0"], include_in_schema=False)
-async def mylocalip_get(
-    request: Request,
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
-):
-    client_ip = x_original_forwarded_for
-    # this is the page the user loads if they want to see their local IPs
-    # if there is only one ip, redirect them to it
-    # if there are multiple, show them some clickable links for each
-    # if there are none, show them a message saying no IPs found
-    my_ips = await redisVRS.redis.get("mylocalip:" + client_ip)
-    if my_ips:
-        my_ips = my_ips.decode().split(",")
-        if len(my_ips) == 1:
-            return RedirectResponse(url="http://" + my_ips[0] + ":5000/")
-        else:
-            return templates.TemplateResponse(
-                "mylocalip.html", {"ips": my_ips, "request": request}
-            )
-    else:
-        return templates.TemplateResponse(
-            "mylocalip.html", {"ips": [], "request": request}
-        )
-
-
 @app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP")
-async def api_my(
-    x_original_forwarded_for: str | None = Header(default=None, include_in_schema=False)
-):
-    client_ip = x_original_forwarded_for
+async def api_my(request: Request):
+    client_ip = request.client.host
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     uids = []
     if len(my_beast_clients) == 0:

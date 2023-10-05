@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, Path
+from fastapi import APIRouter, Request, Path
 from fastapi.responses import Response
 from fastapi_cache.decorator import cache
 
@@ -19,14 +19,10 @@ router = APIRouter(
     description="Returns all aircraft with [PIA](https://nbaa.org/aircraft-operations/security/privacy/privacy-icao-address-pia/) addresses.",
 )
 @cache(expire=REDIS_TTL)
-async def v2_pia(
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
-) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
+async def v2_pia(request: Request) -> V2Response_Model:
     params = ["all", "filter_pia"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -36,14 +32,10 @@ async def v2_pia(
     description="Returns all military registered aircraft.",
 )
 @cache(expire=REDIS_TTL)
-async def v2_mil(
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
-) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
+async def v2_mil(request: Request) -> V2Response_Model:
     params = ["all", "filter_mil"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -54,13 +46,11 @@ async def v2_mil(
 )
 @cache(expire=REDIS_TTL)
 async def v2_ladd(
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
+    request: Request,
 ) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
     params = ["all", "filter_ladd"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -77,14 +67,12 @@ async def v2_ladd(
 @cache(expire=REDIS_TTL)
 async def v2_squawk_filter(
     # Allow custom examples
+    request: Request,
     squawk: str = Path(default=..., example="1200"),
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
     params = ["all", f"filter_squawk={squawk}"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -95,14 +83,12 @@ async def v2_squawk_filter(
 )
 @cache(expire=REDIS_TTL)
 async def v2_type_filter(
+    request: Request,
     aircraft_type: str = Path(default=..., example="A320"),
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
     params = [f"find_type={aircraft_type}"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -118,14 +104,12 @@ async def v2_type_filter(
 )
 @cache(expire=REDIS_TTL)
 async def v2_reg_filter(
+    request: Request,
     registration: str = Path(default=..., example="G-KELS"),
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
     params = [f"find_reg={registration}"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -141,14 +125,12 @@ async def v2_reg_filter(
 )
 @cache(expire=REDIS_TTL)
 async def v2_hex_filter(
+    request: Request,
     icao_hex: str = Path(default=..., example="4CA87C"),
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
     params = [f"find_hex={icao_hex}"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -159,14 +141,12 @@ async def v2_hex_filter(
 )
 @cache(expire=REDIS_TTL)
 async def v2_callsign_filter(
+    request: Request,
     callsign: str = Path(default=..., example="JBU1942"),
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
     params = [f"find_callsign={callsign}"]
 
-    res = await provider.ReAPI.request(params=params, client_ip=client_ip)
+    res = await provider.ReAPI.request(params=params, client_ip=request.client.host)
     return Response(res, media_type="application/json")
 
 
@@ -182,17 +162,15 @@ async def v2_callsign_filter(
 )
 @cache(expire=REDIS_TTL)
 async def v2_point(
+    request: Request,
     lat: float = Path(..., example=51.89508, ge=-90, le=90),
     lon: float = Path(..., example=2.79437, ge=-180, le=180),
     radius: int = Path(..., example=250, ge=0, le=250),
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
     radius = min(radius, 250)
-    client_ip = x_original_forwarded_for
 
     res = await provider.ReAPI.request(
-        params=[f"circle={lat},{lon},{radius}"], client_ip=client_ip
+        params=[f"circle={lat},{lon},{radius}"], client_ip=request.client.host
     )
     return Response(res, media_type="application/json")
 
@@ -204,15 +182,12 @@ async def v2_point(
     description="Returns the closest aircraft to a point described by the latitude and longtidude within a radius up to 250nm.",
 )
 async def v2_closest(
+    request: Request,
     lat: float = Path(..., example=51.89508, ge=-90, le=90),
     lon: float = Path(..., example=2.79437, ge=-180, le=180),
     radius: int = Path(..., example=250, ge=0, le=250),
-    x_original_forwarded_for: str
-    | None = Header(default=None, include_in_schema=False),
 ) -> V2Response_Model:
-    client_ip = x_original_forwarded_for
-
     res = await provider.ReAPI.request(
-        params=[f"closest={lat},{lon},{radius}"], client_ip=client_ip
+        params=[f"closest={lat},{lon},{radius}"], client_ip=request.client.host
     )
     return Response(res, media_type="application/json")

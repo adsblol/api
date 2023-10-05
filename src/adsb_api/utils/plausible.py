@@ -23,9 +23,9 @@ def plausible(
             airportBLat,
             airportBLon,
             "50",
-            "20"
+            "20",
         ],
         capture_output=True,
     )
     distance = orjson.loads(distanceResult.stdout)
-    return distance['withinThreshold'], distance['distAB']
+    return distance["withinThreshold"], distance["distAB"]
