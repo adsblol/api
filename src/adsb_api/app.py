@@ -4,6 +4,8 @@ import secrets
 import time
 import traceback
 import uuid
+import random
+import asyncio
 
 import aiohttp
 import orjson
@@ -168,14 +170,6 @@ async def mlat_totalcount_json():
     return provider.mlat_totalcount_json
 
 
-@app.post("/api/0/uuid", response_class=PrettyJSONResponse, include_in_schema=False)
-async def post_uuid(data: ApiUuidRequest):
-    generated_uuid = str(uuid.uuid4())
-    json_log = orjson.dumps({"uuid": generated_uuid, "data": data.dict()})
-    print(json_log)
-    return {"uuid": generated_uuid}
-
-
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
     """
@@ -201,35 +195,62 @@ async def metrics():
     response_class=PrettyJSONResponse,
     tags=["v0"],
     summary="Information about your receiver and global stats",
+    include_in_schema=False,
+)
+@app.get(
+    "/0/me",
+    response_class=PrettyJSONResponse,
+    tags=["v0"],
+    summary="Information about your receiver and global stats",
 )
 async def api_me(request: Request):
     client_ip = request.client.host
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     mlat_clients = provider.mlat_clients_to_list(client_ip)
 
+    # /api/0/me is deprecated,
+    # add a warning in the response,
+    # also, planes is also for /api/0/me,
+    # in /0/me they are called aircraft
+
     # count all items as mlat_clients format is {'0a': {clients}, '0b': {clients}}
     all_mlat_clients = sum([len(i) for i in provider.mlat_clients.values()])
     response = {
-        "feeding": {
-            "beast": len(my_beast_clients) > 0,
-            "mlat": len(mlat_clients) > 0,
-        },
+        "_motd": [],
         "clients": {
             "beast": my_beast_clients,
             "mlat": mlat_clients,
         },
-        "client_ip": client_ip,
         "global": {
             "beast": len(provider.beast_clients),
             "mlat": all_mlat_clients,
-            "planes": provider.aircraft_totalcount,
+            "aircraft": provider.aircraft_totalcount,
         },
     }
+    # if we are on /api/0/me, add a warning
+    if request.url.path == "/api/0/me":
+        response["_motd"].append([
+            "WARNING: /api/0/me is deprecated, use /0/me instead",
+            "WARNING: This API gets a random sleep of 5-10 seconds to make you switch to /0/me as per previous WARNINGs",
+            "WARNING: /api/0/me will be removed 1 Nov, 2023. 500s will gradually increase until then.",
+            "DIFF: /0/me: .global.planes is renamed to .global.aircraft",
+            "DIFF: /0/me: .feeding.beast and .feeding.mlat have been removed. Count the .clients instead.",
+            "DIFF: /0/me: .client_ip is removed. Use icanhazip.com instead.",
+        ])
+        response["global"]["planes"] = provider.aircraft_totalcount
+        response["feeding"] = {
+            "beast": len(my_beast_clients) > 0,
+            "mlat": len(mlat_clients) > 0,
+        }
+        response["client_ip"] = client_ip
+
+        await asyncio.sleep(random.randint(2, 5))
+
 
     return response
 
-
-@app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP")
+@app.get("/0/my", tags=["v0"], summary="My Map redirect based on IP")
+@app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP", include_in_schema=False)
 async def api_my(request: Request):
     client_ip = request.client.host
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)

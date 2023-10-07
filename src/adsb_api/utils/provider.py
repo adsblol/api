@@ -195,7 +195,7 @@ class Provider:
                 "messages_per_second": client[4],
                 "positions_per_second": client[5],
                 "positions": client[8],
-                "type": "beast",
+                "ms": client[7],
             }
 
         self.beast_clients = clients.values()
