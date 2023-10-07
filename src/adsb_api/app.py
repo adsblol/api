@@ -231,8 +231,8 @@ async def api_me(request: Request):
     if request.url.path == "/api/0/me":
         response["_motd"].append([
             "WARNING: /api/0/me is deprecated, use /0/me instead",
-            "WARNING: This API gets a random sleep of 5-10 seconds to make you switch to /0/me as per previous WARNINGs",
-            "WARNING: /api/0/me will be removed 1 Nov, 2023. 500s will gradually increase until then.",
+            "WARNING: /api/0/me is to be removed 1 Nov, 2023.",
+            "WARNING: /api/0/me is being slowed down 5-10 seconds to make users notice the deprecation.",
             "DIFF: /0/me: .global.planes is renamed to .global.aircraft",
             "DIFF: /0/me: .feeding.beast and .feeding.mlat have been removed. Count the .clients instead.",
             "DIFF: /0/me: .client_ip is removed. Use icanhazip.com instead.",
@@ -246,7 +246,12 @@ async def api_me(request: Request):
 
         await asyncio.sleep(random.randint(2, 5))
 
-
+    # If any of the clients.beast.ms = -1, they PROBABLY do not use beast_reduce_plus_out
+    # so add a WARNING
+    if any([i["ms"] == -1 for i in my_beast_clients]):
+        response["_motd"].append(
+            "WARNING: You are probably not using beast_reduce_plus_out. Please use it instead of beast_reduce_out."
+        )
     return response
 
 @app.get("/0/my", tags=["v0"], summary="My Map redirect based on IP")
