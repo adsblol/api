@@ -6,6 +6,8 @@ import traceback
 import uuid
 import random
 import asyncio
+from collections import defaultdict
+import h3
 
 import aiohttp
 import orjson
@@ -232,7 +234,7 @@ async def api_me(request: Request):
         response["_motd"].append([
             "WARNING: /api/0/me is deprecated, use /0/me instead",
             "WARNING: /api/0/me is to be removed 1 Nov, 2023.",
-            "WARNING: /api/0/me is being slowed down 5-10 seconds to make users notice the deprecation.",
+            "WARNING: /api/0/me is being slowed down 1-3 seconds to make users notice the deprecation.",
             "DIFF: /0/me: .global.planes is renamed to .global.aircraft",
             "DIFF: /0/me: .feeding.beast and .feeding.mlat have been removed. Count the .clients instead.",
             "DIFF: /0/me: .client_ip is removed. Use icanhazip.com instead.",
@@ -244,7 +246,7 @@ async def api_me(request: Request):
         }
         response["client_ip"] = client_ip
 
-        await asyncio.sleep(random.randint(2, 5))
+        await asyncio.sleep(random.randint(1, 3))
 
     # If any of the clients.beast.ms = -1, they PROBABLY do not use beast_reduce_plus_out
     # so add a WARNING
@@ -394,6 +396,28 @@ async def planespotters_net_hex_options():
         },
     )
 
+@app.get(
+    "/0/h3_latency",
+    include_in_schema=False,
+    tags=["v0"],
+)
+async def h3_latency():
+    _h3 = defaultdict(list)
+    for receiverId, lat, lon in provider.beast_receivers:
+        for client in provider.beast_clients:
+            if not client["_uuid"].startswith(receiverId) or client.get("ms", -1) < 0:
+                continue
+            _h3[h3.latlng_to_cell(lat, lon, 1)].append(client["ms"])
+    ret = {
+        "median": {},
+    }
+    for key, value in _h3.items():
+        # calculate median
+        value.sort()
+        ret["median"][key] = value[len(value) // 2]
+    # sort ret["median"] by value
+    ret["median"] = dict(sorted(ret["median"].items(), key=lambda item: item[1]))
+    return Response(orjson.dumps(ret), media_type="application/json")
 
 if __name__ == "__main__":
     print("Run with:")

@@ -14,3 +14,4 @@ playwright
 backoff
 async-timeout
 async_lru
+h3>=4.0.0b2

@@ -58,6 +58,8 @@ greenlet==2.0.2
     # via playwright
 h11==0.14.0
     # via uvicorn
+h3==4.0.0b2
+    # via -r requirements.in
 httptools==0.6.0
     # via uvicorn
 humanhash3==0.0.6

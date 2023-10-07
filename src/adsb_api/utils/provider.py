@@ -120,7 +120,7 @@ class Provider:
                                     f"my:{my_humanhashy}", receiver[0], ex=60
                                 )
                                 lat, lon = round(receiver[8], 1), round(receiver[9], 1)
-                                receivers.append([lat, lon])
+                                receivers.append([receiver[0], lat, lon])
                             await pipeline.execute()
 
                     await self.set_beast_clients(clients)
@@ -188,6 +188,7 @@ class Provider:
                 # "adsblol_beast_id": self.salty_uuid(client[0], SALT_BEAST),
                 # "adsblol_beast_hash": self._humanhashy(client[0], SALT_BEAST),
                 "uuid": client[0][:13] + "-...",
+                "_uuid": client[0],
                 "adsblol_my_url": my_url,
                 "ip": client[1].split()[1],
                 "kbps": client[2],
