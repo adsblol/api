@@ -408,15 +408,23 @@ async def h3_latency():
             if not client["_uuid"].startswith(receiverId) or client.get("ms", -1) < 0:
                 continue
             _h3[h3.latlng_to_cell(lat, lon, 1)].append(client["ms"])
-    ret = {
-        "median": {},
-    }
+    ret = defaultdict(dict)
     for key, value in _h3.items():
         # calculate median
         value.sort()
-        ret["median"][key] = value[len(value) // 2]
-    # sort ret["median"] by value
-    ret["median"] = dict(sorted(ret["median"].items(), key=lambda item: item[1]))
+        ret[key]["median"] = value[len(value) // 2]
+        # calculate average, limit to 2 decimals
+        ret[key]["average"] = round(sum(value) / len(value), 2)
+        # calculate min
+        ret[key]["min"] = min(value)
+        # calculate max
+        ret[key]["max"] = max(value)
+        # calculate count
+        ret[key]["count"] = len(value)
+    # if count < 2, remove the key
+    ret = {key: value for key, value in ret.items() if value["count"] > 1}
+    # sort by median
+    ret = dict(sorted(ret.items(), key=lambda item: item[1]["median"]))
     return Response(orjson.dumps(ret), media_type="application/json")
 
 if __name__ == "__main__":
