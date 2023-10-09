@@ -6,7 +6,6 @@ from adsb_api.utils.browser2 import (
     before_return_to_pool_cb,
 )
 
-provider = Provider(enabled_bg_tasks=ENABLED_BG_TASKS)
 redisVRS = RedisVRS()
 browser = BrowserTabPool(
     url="https://adsb.lol/",
