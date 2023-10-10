@@ -16,17 +16,6 @@ import redis.asyncio as redis
 from async_lru import alru_cache
 
 
-from adsb_api.utils.settings import (
-    INGEST_DNS,
-    INGEST_HTTP_PORT,
-    REAPI_ENDPOINT,
-    SALT_MLAT,
-    SALT_MY,
-    STATS_URL,
-    MLAT_SERVERS,
-)
-
-
 class RedisVRS:
     def __init__(self, redis=None):
         self.redis_connection_string = redis
