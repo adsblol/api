@@ -21,6 +21,7 @@ from redis import asyncio as aioredis
 from adsb_api.utils.api_routes import router as routes_router
 from adsb_api.utils.dependencies import browser, redisVRS
 from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
+from adsb_api.utils.settings import REDIS_HOST
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
