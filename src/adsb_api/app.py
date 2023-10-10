@@ -7,12 +7,10 @@ import uuid
 import random
 import asyncio
 from collections import defaultdict
-import h3
 
 import aiohttp
 import orjson
 from fastapi import FastAPI, Header, Request
-from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -75,25 +73,6 @@ async def favicon():
     return FileResponse("static/favicon.ico")
 
 
-def ensure_uuid_security():
-    # Each UUID should be at least 128 characters long
-    # and should be unique.
-    # If no UUIDs are set, generate some.
-    if INSECURE:
-        time.sleep(0.5)
-        print("WARNING: INSECURE MODE IS ENABLED")
-        print("WARNING: UUIDS WILL BE GENERATED ON EACH STARTUP!")
-        time.sleep(0.5)
-    salts = {"my": SALT_MY, "mlat": SALT_MLAT, "beast": SALT_BEAST}
-    for name, salt in salts.items():
-        if salt is None or len(salt) < 128:
-            print(f"WARNING: {name} salt is not secure")
-            print("WARNING: Overriding with random salt")
-            salts[name] = secrets.token_hex(128)
-            # print first chars of salt
-            print("WARNING: First 10 chars of salt: " + salts[name][:10])
-
-
 @app.on_event("startup")
 async def startup_event():
     redis = aioredis.from_url(REDIS_HOST, encoding="utf8", decode_responses=True)
@@ -106,8 +85,6 @@ async def startup_event():
         await browser.start()
     except:
         traceback.print_exc()
-
-    ensure_uuid_security()
 
 
 @app.on_event("shutdown")
