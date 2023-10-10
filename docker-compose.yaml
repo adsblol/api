@@ -14,7 +14,7 @@ services:
       - INSECURE=1
       - ADSBLOL_ENABLED_BG_TASKS=
     ports:
-      - 8089:80
+      - 8910:80
   redis:
     image: redis:alpine
     ports:
