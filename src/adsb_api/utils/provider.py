@@ -4,7 +4,6 @@ import gzip
 import hashlib
 import re
 import traceback
-import uuid
 from datetime import datetime
 from functools import lru_cache
 
@@ -29,8 +28,8 @@ class RedisVRS:
     async def download_csv_to_import(self):
         print("vrsx download_csv_to_import")
         CSVS = {
-            "route": "https://127.0.0.1/routes.csv.gz",
-            "airport": "https://127.0.0.1/airports.csv.gz",
+            "route": "https://adsb.oarc.uk/routes.csv.gz",
+            "airport": "https://adsb.oarc.uk/airports.csv.gz",
         }
         async with aiohttp.ClientSession() as session:
             for name, url in CSVS.items():
