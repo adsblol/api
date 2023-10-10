@@ -28,33 +28,23 @@ from adsb_api.utils.settings import INSECURE, REDIS_HOST, SALT_BEAST, SALT_MLAT,
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
 description = """
-The adsb.lol API is a free and open source
-API for the [adsb.lol](https://adsb.lol) project.
+The OARC ADS-B API is a free and open source route
+API for the [OARC ADS-B](https://adsb.oarc.uk) project.
 
 ## Usage of
 You can use the API by sending a GET request
 to the endpoint you want to use.
 The API will return a JSON response.
 
-## Feeders
-
-By sending data to adsb.lol, you get access to the
-[direct readsb re-api](https://www.adsb.lol/docs/feeders-only/re-api/)
-and
-[our raw aggregated data](https://www.adsb.lol/docs/feeders-only/beast-mlat-out/). :)
-
 ## Terms of Service
 You can use the API for free.
-
-In the future, you will require an API key
-which you can get by feeding to adsb.lol.
 
 If you want to use the API for production purposes,
 please contact me so I do not break your application by accident.
 
 ## License
 
-The license for the API as well as all data ADSB.lol
+The license for the API as well as all data OARC ADS-B
 makes public is [ODbL](https://opendatacommons.org/licenses/odbl/summary/).
 
 This is the same license
@@ -62,9 +52,9 @@ This is the same license
 """
 
 app = FastAPI(
-    title="adsb.lol API",
+    title="OARC ADS-B Route API",
     description=description,
-    version="0.0.2",
+    version="0.0.1",
     docs_url=None,
     redoc_url=None,
     openapi_url="/api/openapi.json",
@@ -108,8 +98,7 @@ def ensure_uuid_security():
 async def startup_event():
     redis = aioredis.from_url(REDIS_HOST, encoding="utf8", decode_responses=True)
     FastAPICache.init(RedisBackend(redis), prefix="api")
-    for i in (redisVRS):
-        i.redis_connection_string = REDIS_HOST
+    redisVRS.redis_connection_string = REDIS_HOST
     await provider.startup()
     await redisVRS.connect()
     await redisVRS.dispatch_background_task()
@@ -127,101 +116,6 @@ async def shutdown_event():
     await redisVRS.shutdown()
     await browser.shutdown()
 
-
-@app.get(
-    "/api/0/mlat-server/{server}/sync.json",
-    response_class=PrettyJSONResponse,
-    include_in_schema=False,
-)
-async def mlat_receivers(
-    server: str,
-    host: str | None = Header(default=None, include_in_schema=False),
-):
-    # if the host is not mlat.adsb.lol,
-    # return a 404
-    if host != "mlat.adsb.lol":
-        return {"error": "not found"}
-
-    if server not in provider.mlat_sync_json.keys():
-        return {"error": "not found"}
-
-    return provider.mlat_sync_json[server]
-
-
-@app.get(
-    "/api/0/mlat-server/totalcount.json",
-    response_class=PrettyJSONResponse,
-    include_in_schema=False,
-)
-async def mlat_totalcount_json():
-    return provider.mlat_totalcount_json
-
-
-@app.get(
-    "/data/aircraft.json",
-    response_class=PrettyJSONResponse,
-    include_in_schema=False,
-)
-async def aircraft_json(
-    host: str | None = Header(default=None, include_in_schema=False)
-):
-    uids = host.split(".")[0].split("_")
-    ac = []
-    for uid in uids:
-        # we need to find the name of a redis key by its value!
-        receiver = await feederData.redis.get(f"my:{uid}")
-        if receiver:
-            receiver = receiver.decode()[:18]
-        else:
-            continue
-
-        if receiver:
-            data = await feederData.get_aircraft(receiver)
-            if data is not None:
-                # remove key recentReceiverIds if it exists
-                for aircraft in data:
-                    try:
-                        del aircraft["recentReceiverIds"]
-                    except KeyError:
-                        pass
-                ac.extend(data)
-    return {
-        "now": int(time.time()),
-        "messages": 0,
-        "aircraft": ac,
-    }
-
-
-@app.get(
-    "/0/h3_latency",
-    include_in_schema=False,
-    tags=["v0"],
-)
-async def h3_latency():
-    _h3 = defaultdict(list)
-    for receiverId, lat, lon in provider.beast_receivers:
-        for client in provider.beast_clients:
-            if not client["_uuid"].startswith(receiverId) or client.get("ms", -1) < 0:
-                continue
-            _h3[h3.latlng_to_cell(lat, lon, 1)].append(client["ms"])
-    ret = defaultdict(dict)
-    for key, value in _h3.items():
-        # calculate median
-        value.sort()
-        ret[key]["median"] = value[len(value) // 2]
-        # calculate average, limit to 2 decimals
-        ret[key]["average"] = round(sum(value) / len(value), 2)
-        # calculate min
-        ret[key]["min"] = min(value)
-        # calculate max
-        ret[key]["max"] = max(value)
-        # calculate count
-        ret[key]["count"] = len(value)
-    # if count < 2, remove the key
-    ret = {key: value for key, value in ret.items() if value["count"] > 1}
-    # sort by median
-    ret = dict(sorted(ret.items(), key=lambda item: item[1]["median"]))
-    return Response(orjson.dumps(ret), media_type="application/json")
 
 if __name__ == "__main__":
     print("Run with:")
