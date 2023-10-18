@@ -1,4 +1,3 @@
-aiohttp
 jinja2
 aiohttp_jinja2
 pyopenssl
@@ -15,3 +14,5 @@ backoff
 async-timeout
 async_lru
 h3>=4.0.0b2
+pendulum>=3.0.0b1
+aiohttp>=3.9.0b0

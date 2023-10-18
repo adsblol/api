@@ -1,11 +1,11 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 COPY ./requirements.txt /app
 COPY ./distance /app/distance
 
 # "Installing this module requires OpenSSL python bindings"
-RUN BUILD_DEPS="libssl-dev cargo gcc g++ libffi-dev" && \
+RUN BUILD_DEPS="libssl-dev cargo gcc g++ libffi-dev build-essential" && \
     apt-get update && apt-get install -y $BUILD_DEPS && \
     PYOPENSSL=$(grep 'pyopenssl=' requirements.txt) && \
     pip install --no-cache-dir $PYOPENSSL && \
