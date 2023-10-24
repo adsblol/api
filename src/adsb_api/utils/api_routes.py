@@ -70,6 +70,7 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
     tags=["v0"],
     summary="Route plus plausible flag for a specific callsign and position",
     description="Data by https://github.com/vradarserver/standing-data/",
+    include_in_schema=False,
 )
 async def api_route3(
     callsign: str,
@@ -91,6 +92,7 @@ async def api_route3(
     tags=["v0"],
     summary="Route for a specific callsign",
     description="Data by https://github.com/vradarserver/standing-data/",
+    include_in_schema=False,
 )
 async def api_route(
     callsign: str,
@@ -98,8 +100,9 @@ async def api_route(
     """
     Return information about a route.
     """
-    route = await redisVRS.get_route(callsign)
-    return PrettyJSONResponse(content=route, headers=CORS_HEADERS)
+    new_url = f"https://vrs-standing-data.adsb.lol/routes/{callsign[0:2]}/{callsign}.json#this-API-has-been-deprecated-please-use-this-new-URL-directly"
+    await asyncio.sleep(5)
+    return Response(status_code=302, headers={"Location": new_url})
 
 
 @router.post(
