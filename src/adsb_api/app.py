@@ -125,8 +125,9 @@ async def startup_event():
         i.redis_connection_string = REDIS_HOST
     await provider.startup()
     await redisVRS.connect()
-    await redisVRS.dispatch_background_task()
     await feederData.connect()
+    await asyncio.sleep(1)
+    await redisVRS.dispatch_background_task()
     await feederData.dispatch_background_task()
     try:
         await browser.start()
