@@ -30,7 +30,6 @@ class ReAPI:
         timeout = aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as response:
-                response.raise_for_status()
                 return await response.text()
 
 
