@@ -32,21 +32,29 @@ class Base:
     async def _lock(self, name):
         key = f"lock:{name}"
         value = gethostname()
+
         if  not isinstance(self.redis, redis.Redis):
             print("Lock: Redis is not connected")
             return False
-        print(f"Trying to Lock {key} as {value}")
-        if await self.redis.set(key, value, nx=True, ex=10):
-            print(f"Locked {key}:{value}")
-            return True
+        try:
+            print(f"Trying to Lock {key} as {value}")
+            if await self.redis.set(key, value, nx=True, ex=10):
+                print(f"Locked {key}:{value}")
+                return True
 
-        current_locker = (await self.redis.get(key)).decode()
-        if current_locker == value:
-            print(f"Already Locked {key}")
-            return True
-        print(f"Lock {name} is locked by {current_locker}")
-        return False
-
+            current_locker = await self.redis.get(key)
+            if current_locker is None:
+                print(f"Lock {name} is not locked")
+                return False
+            current_locker = current_locker.decode()
+            if current_locker == value:
+                print(f"Already Locked {key}")
+                return True
+            print(f"Lock {name} is locked by {current_locker}")
+            return False
+        except Exception as e:
+            print("Error Locking:", e)
+            return False
 class Provider(Base):
     def __init__(self, enabled_bg_tasks):
         self.aircrafts = {}
