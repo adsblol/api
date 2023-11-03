@@ -107,10 +107,6 @@ class Provider(Base):
     async def fetch_hub_stats(self):
         try:
             while True:
-                if not await self._lock("hub_stats"):
-                    print(f"hub_stats not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     async with self.client_session.get(STATS_URL) as resp:
                         data = await resp.json()
@@ -126,10 +122,6 @@ class Provider(Base):
     async def fetch_ingest(self):
         try:
             while True:
-                if not await self._lock("ingest"):
-                    print(f"ingest not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     ips = [
                         record.host
@@ -180,10 +172,6 @@ class Provider(Base):
     async def fetch_mlat(self):
         try:
             while True:
-                if not await self._lock("mlat"):
-                    print(f"mlat not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     data_per_server = {}
                     for server in MLAT_SERVERS:
