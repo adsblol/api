@@ -2,12 +2,20 @@ import asyncio
 import logging
 import traceback
 from contextlib import asynccontextmanager
+from os import getenv
 from typing import Optional
 
 import backoff
 from async_timeout import timeout
 from playwright.async_api import Page, async_playwright
 
+SCREEN_SIZE = {"width": 256, "height": 256}
+
+# SCREEN_SIZE override from env var
+SCREEN_SIZE = {
+    "width": int(getenv("BROWSER2_SCREEN_WIDTH", SCREEN_SIZE["width"])),
+    "height": int(getenv("BROWSER2_SCREEN_HEIGHT", SCREEN_SIZE["height"])),
+}
 
 class BrowserTabPool:
     def __init__(
@@ -76,8 +84,8 @@ class BrowserTabPool:
         self.logger.info("Total number of tabs after addition: %s", self._total_tabs)
         context = await self.browser.new_context(
             base_url=self.url,
-            viewport={"width": 512, "height": 512},
-            screen={"width": 512, "height": 512},
+            viewport=SCREEN_SIZE,
+            screen=SCREEN_SIZE,
         )
         tab = await context.new_page()
         tab.__use_count = 0
@@ -234,7 +242,7 @@ async def before_add_to_pool_cb(page):
         page.route("**/api/0/routeset", lambda route: route.abort()),
         page.route("**/globeRates.json", lambda route: route.abort()),
         page.route("https://api.planespotters.net/*", lambda route: route.abort()),
-        page.set_viewport_size({"width": 512, "height": 512}),
+        page.set_viewport_size(SCREEN_SIZE),
         page.goto("?screenshot&zoom=6&hideButtons&hideSidebar&lat=82&lon=-5&nowebGL"),
     ]
     try:
