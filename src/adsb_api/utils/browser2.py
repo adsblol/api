@@ -76,8 +76,8 @@ class BrowserTabPool:
         self.logger.info("Total number of tabs after addition: %s", self._total_tabs)
         context = await self.browser.new_context(
             base_url=self.url,
-            viewport={"width": 512, "height": 512},
-            screen={"width": 512, "height": 512},
+            viewport={"width": 256, "height": 256},
+            screen={"width": 256, "height": 256},
         )
         tab = await context.new_page()
         tab.__use_count = 0
@@ -234,7 +234,7 @@ async def before_add_to_pool_cb(page):
         page.route("**/api/0/routeset", lambda route: route.abort()),
         page.route("**/globeRates.json", lambda route: route.abort()),
         page.route("https://api.planespotters.net/*", lambda route: route.abort()),
-        page.set_viewport_size({"width": 512, "height": 512}),
+        page.set_viewport_size({"width": 256, "height": 256}),
         page.goto("?screenshot&zoom=6&hideButtons&hideSidebar&lat=82&lon=-5&nowebGL"),
     ]
     try:
