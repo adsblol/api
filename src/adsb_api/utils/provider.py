@@ -287,7 +287,7 @@ class Provider(Base):
             sanitized_data[self.maybe_salty_uuid(name, SALT_MLAT)] = {
                 "lat": value["lat"],
                 "lon": value["lon"],
-                "bad_syncs": value["bad_syncs"],
+                "bad_syncs": value.get("bad_syncs", -1),
                 "peers": sanitised_peers,
             }
 
