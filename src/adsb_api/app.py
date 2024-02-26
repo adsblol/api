@@ -1,15 +1,15 @@
+import asyncio
 import ipaddress
 import pathlib
+import random
 import secrets
 import time
 import traceback
 import uuid
-import random
-import asyncio
 from collections import defaultdict
-import h3
 
 import aiohttp
+import h3
 import orjson
 from fastapi import FastAPI, Header, Request
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -25,7 +25,8 @@ from adsb_api.utils.api_tar import router as tar_router
 from adsb_api.utils.api_v2 import router as v2_router
 from adsb_api.utils.dependencies import browser, feederData, provider, redisVRS
 from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
-from adsb_api.utils.settings import INSECURE, REDIS_HOST, SALT_BEAST, SALT_MLAT, SALT_MY
+from adsb_api.utils.settings import (INSECURE, REDIS_HOST, SALT_BEAST,
+                                     SALT_MLAT, SALT_MY)
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
 
@@ -156,9 +157,11 @@ async def mlat_receivers(
     # if the host is not mlat.adsb.lol,
     # return a 404
     if host != "mlat.adsb.lol":
+        print(f"failed mlat_sync host={host}, server={server} (not mlat.adsb.lol)")
         return {"error": "not found"}
 
     if server not in provider.mlat_sync_json.keys():
+        print(f"failed mlat_sync host={host}, server={server} (not in {provider.mlat_sync_json.keys()})")
         return {"error": "not found"}
 
     return provider.mlat_sync_json[server]
