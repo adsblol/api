@@ -16,17 +16,11 @@ import orjson
 import redis.asyncio as redis
 from async_lru import alru_cache
 
-
 from adsb_api.utils.reapi import ReAPI
-from adsb_api.utils.settings import (
-    INGEST_DNS,
-    INGEST_HTTP_PORT,
-    REAPI_ENDPOINT,
-    SALT_MLAT,
-    SALT_MY,
-    STATS_URL,
-    MLAT_SERVERS,
-)
+from adsb_api.utils.settings import (INGEST_DNS, INGEST_HTTP_PORT,
+                                     MLAT_SERVERS, REAPI_ENDPOINT, SALT_MLAT,
+                                     SALT_MY, STATS_URL)
+
 
 class Base:
     async def _lock(self, name):
@@ -293,6 +287,7 @@ class Provider(Base):
             sanitized_data[self.maybe_salty_uuid(name, SALT_MLAT)] = {
                 "lat": value["lat"],
                 "lon": value["lon"],
+                "bad_syncs": value["bad_syncs"],
                 "peers": sanitised_peers,
             }
 
