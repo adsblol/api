@@ -197,13 +197,6 @@ async def metrics():
 
 
 @app.get(
-    "/api/0/me",
-    response_class=PrettyJSONResponse,
-    tags=["v0"],
-    summary="Information about your receiver and global stats",
-    include_in_schema=False,
-)
-@app.get(
     "/0/me",
     response_class=PrettyJSONResponse,
     tags=["v0"],
@@ -213,11 +206,6 @@ async def api_me(request: Request):
     client_ip = request.client.host
     my_beast_clients = provider.get_clients_per_client_ip(client_ip)
     mlat_clients = provider.mlat_clients_to_list(client_ip)
-
-    # /api/0/me is deprecated,
-    # add a warning in the response,
-    # also, planes is also for /api/0/me,
-    # in /0/me they are called aircraft
 
     # count all items as mlat_clients format is {'0a': {clients}, '0b': {clients}}
     all_mlat_clients = sum([len(i) for i in provider.mlat_clients.values()])
@@ -233,24 +221,6 @@ async def api_me(request: Request):
             "aircraft": provider.aircraft_totalcount,
         },
     }
-    # if we are on /api/0/me, add a warning
-    if request.url.path == "/api/0/me":
-        response["_motd"].append([
-            "WARNING: /api/0/me is deprecated, use /0/me instead",
-            "WARNING: /api/0/me is to be removed 1 Nov, 2023.",
-            "WARNING: /api/0/me is being slowed down 1-3 seconds to make users notice the deprecation.",
-            "DIFF: /0/me: .global.planes is renamed to .global.aircraft",
-            "DIFF: /0/me: .feeding.beast and .feeding.mlat have been removed. Count the .clients instead.",
-            "DIFF: /0/me: .client_ip is removed. Use icanhazip.com instead.",
-        ])
-        response["global"]["planes"] = provider.aircraft_totalcount
-        response["feeding"] = {
-            "beast": len(my_beast_clients) > 0,
-            "mlat": len(mlat_clients) > 0,
-        }
-        response["client_ip"] = client_ip
-
-        await asyncio.sleep(random.randint(1, 3))
 
     # If any of the clients.beast.ms = -1, they PROBABLY do not use beast_reduce_plus_out
     # so add a WARNING
