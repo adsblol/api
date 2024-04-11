@@ -274,7 +274,14 @@ class Provider(Base):
                     clients_list.append(
                         {key: client[key] for key in keys_to_copy if key in client}
                     )
-
+                    # for uuid, special handle because it's a list,
+                    # we get first element if it's there, otherwise set it to None
+                    try:
+                        clients_list[-1]["uuid"] = (
+                            client["uuid"][0][:13] + "-..." if client["uuid"] else None
+                        )
+                    except:
+                        clients_list[-1]["uuid"] = None
         return clients_list
 
     def anonymize_mlat_data(self, data):
