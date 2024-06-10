@@ -228,6 +228,12 @@ async def api_me(request: Request):
         response["_motd"].append(
             "WARNING: You are probably not using beast_reduce_plus_out. Please use it instead of beast_reduce_out."
         )
+    # If there's any mlat client, and bad sync timeout is >0 for any of them, add a WARNING
+    if any([i["bad_sync_timeout"] > 0 for i in mlat_clients]):
+        response["_motd"].append(
+            "WARNING: Some of your mlat clients have bad sync timeout. Please check your mlat configuration."
+        )
+    # If any bad
     return response
 
 @app.get("/0/my", tags=["v0"], summary="My Map redirect based on IP")
