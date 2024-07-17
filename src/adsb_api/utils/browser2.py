@@ -369,7 +369,7 @@ async def before_add_to_pool_cb(page):
     """
     tasks = [
         page.evaluate(
-            """$('#selected_infoblock')[0].remove(); function adjustInfoBlock(){}; toggleIsolation("on"); toggleMultiSelect("on"); reaper('all');"""
+            """$('#selected_infoblock')[0].remove(); $('.ol-zoom').remove(); $('.layer-switcher').remove(); function adjustInfoBlock(){}; toggleIsolation("on"); toggleMultiSelect("on"); reaper('all');"""
         ),
         page.evaluate(
             """
