@@ -274,12 +274,18 @@ class Provider(Base):
                     clients_list.append(
                         {key: client[key] for key in keys_to_copy if key in client}
                     )
-                    # for uuid, special handle because it's a list,
-                    # we get first element if it's there, otherwise set it to None
+                    # for uuid, special handle because it's a list OR a string.
                     try:
-                        clients_list[-1]["uuid"] = (
-                            client["uuid"][0][:13] + "-..." if client["uuid"] else None
-                        )
+                        if isinstance(client["uuid"], list):
+                            clients_list[-1]["uuid"] = (
+                                client["uuid"][0][:13] + "-..." if client["uuid"] else None
+                            )
+                        elif isinstance(client["uuid"], str):
+                            clients_list[-1]["uuid"] = (
+                                client["uuid"][:13] + "-..." if client["uuid"] else None
+                            )
+                        else:
+                            clients_list[-1]["uuid"] = None
                     except:
                         clients_list[-1]["uuid"] = None
         return clients_list
