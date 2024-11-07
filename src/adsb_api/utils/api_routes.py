@@ -44,6 +44,19 @@ async def pruneRouteCache():
             del route_cache[key]
     print(f"PRUNED route_cache, new item count: {len(plausible_cache)} (took {round((time.time() - now) * 1000, 3)} ms)")
 
+plausible_cache = {}
+plausible_cache_next_prune = 0
+
+async def prunePlausibleCache():
+    now = time.time()
+    for key in list(plausible_cache.keys()):
+        value = plausible_cache[key]
+        cachedPlausible, cachedLat, cachedLon, validUntil = value
+        if now > validUntil:
+            del plausible_cache[key]
+    print(f"PRUNED plausible_cache, new item count: {len(plausible_cache)} (took {round((time.time() - now) * 1000, 3)} ms)")
+
+
 async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
 
     # cache routes in the worker for 5 minutes
@@ -63,8 +76,19 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
         route = await redisVRS.get_route(callsign)
         route_cache[key] = (route, now + validTime)
 
+    global plausible_cache_next_prune
+    if now > plausible_cache_next_prune:
+        plausible_cache_next_prune = now + validTime / 2 + 1
+        await prunePlausibleCache()
+
+    cachedPlausible, validUntil = plausible_cache.get(key, (None, 0))
+    if now < validUntil and Haversine(lat, lng, cachedLat, cachedLon) < 10:
+        route["plausible"] = cachedPlausible
+        return route
+
     is_plausible = await redisVRS.is_plausible(callsign)
     if is_plausible:
+        plausible_cache[key] = (is_plausible, now + validTime)
         route["plausible"] = is_plausible
         return route
 
@@ -89,6 +113,7 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
         a = b  # try the next pair in mult segment routes
     print(f"==> {callsign} plausible: {is_plausible} {type(is_plausible)}")
     await redisVRS.set_plausible(callsign, int(is_plausible))
+    plausible_cache[key] = (is_plausible, now + validTime)
     route["plausible"] = is_plausible
     return route
 
