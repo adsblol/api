@@ -4,6 +4,7 @@ from adsb_api.utils.dependencies import redisVRS
 from adsb_api.utils.models import PlaneList
 from adsb_api.utils.plausible import plausible
 import asyncio
+import time
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -31,9 +32,37 @@ async def api_airport(icao: str):
     """
     return await redisVRS.get_airport(icao)
 
+route_cache = {}
+route_cache_next_prune = 0
+
+async def pruneRouteCache():
+    now = time.time()
+    for key in list(route_cache.keys()):
+        value = route_cache[key]
+        route, validUntil = value
+        if now > validUntil:
+            del route_cache[key]
+    print(f"PRUNED route_cache, new item count: {len(plausible_cache)} (took {round((time.time() - now) * 1000, 3)} ms)")
 
 async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
-    route = await redisVRS.get_route(callsign)
+
+    # cache routes in the worker for 5 minutes
+    validTime = 300
+
+    now = time.time()
+    global route_cache_next_prune
+    if now > route_cache_next_prune:
+        route_cache_next_prune = now + validTime / 2
+        await pruneRouteCache()
+
+    key = callsign
+    cached, validUntil = route_cache.get(key, (None, 0))
+    if now < validUntil:
+        route = cached
+    else:
+        route = await redisVRS.get_route(callsign)
+        route_cache[key] = (route, now + validTime)
+
     is_plausible = await redisVRS.is_plausible(callsign)
     if is_plausible:
         route["plausible"] = is_plausible
