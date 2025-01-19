@@ -14,7 +14,6 @@ import aiohttp
 import humanhash
 import orjson
 import redis.asyncio as redis
-from async_lru import alru_cache
 
 from adsb_api.utils.reapi import ReAPI
 from adsb_api.utils.settings import (INGEST_DNS, INGEST_HTTP_PORT,
@@ -420,7 +419,6 @@ class RedisVRS(Base):
         print(self.redis_connection_string)
         self.redis = await redis.from_url(self.redis_connection_string)
 
-    @alru_cache(maxsize=1024)
     async def get_route(self, callsign):
         vrsroute = await self.redis.get(f"vrs:route:{callsign}")
         if vrsroute is None:
@@ -461,7 +459,6 @@ class RedisVRS(Base):
 
         return ret
 
-    @alru_cache(maxsize=1024)
     async def get_airport(self, icao):
         data = await self.redis.get(f"vrs:airport:{icao}")
         if data is None:
