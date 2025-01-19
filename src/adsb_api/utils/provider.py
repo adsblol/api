@@ -488,13 +488,13 @@ class RedisVRS(Base):
     # Add callsign to cache
     async def cache_route(self, callsign: str, plausible, route):
         expiry = 1200 if plausible else 60
-        value = orjson.dump(route)
+        value = orjson.dumps(route)
         await self.redis.set(f"vrs:routecache:{callsign}", value, ex=expiry)
 
     async def get_cached_route(self, callsign):
         value = await self.redis.get(f"vrs:routecache:{callsign}")
         if value:
-            return orjson.load(value)
+            return orjson.loads(value)
         else:
             return None
 
