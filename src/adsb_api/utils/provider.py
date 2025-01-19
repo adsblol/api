@@ -486,15 +486,17 @@ class RedisVRS(Base):
         return ret
 
     # Add callsign to cache
-    async def set_plausible(self, callsign: str, valid: int):
-        expiry = 3600 if valid == 1 else 60
-        await self.redis.set(f"vrs:plausible:{callsign}", valid, ex=expiry)
+    async def cache_route(self, callsign: str, plausible, route):
+        expiry = 1200 if plausible else 60
+        value = orjson.dump(route)
+        await self.redis.set(f"vrs:routecache:{callsign}", value, ex=expiry)
 
-    async def is_plausible(self, callsign):
-        cached = await self.redis.get(f"vrs:plausible:{callsign}")
-        if not cached:
+    async def get_cached_route(self, callsign):
+        value = await self.redis.get(f"vrs:routecache:{callsign}")
+        if value:
+            return orjson.load(value)
+        else:
             return None
-        return int(cached.decode())
 
 
 class FeederData(Base):
