@@ -41,10 +41,10 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
 
     if route["airport_codes"] == "unknown":
         return route
-    a = 0
+
     is_plausible = False
     # print(f"==> {callsign}:", end=" ")
-    while a < len(route["_airports"]) - 1:
+    for a in range(len(route["_airports"]) - 1):
         b = a + 1
         airportA = route["_airports"][a]
         airportB = route["_airports"][b]
@@ -57,7 +57,9 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
             f"{airportB['lat']:.5f}",
             f"{airportB['lon']:.5f}",
         )
-        a = b  # try the next pair in mult segment routes
+        if is_plausible:
+            break
+
     print(f"==> {callsign} plausible: {is_plausible} {type(is_plausible)}")
     route["plausible"] = is_plausible
     await redisVRS.cache_route(callsign, is_plausible, route)
