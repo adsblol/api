@@ -33,11 +33,11 @@ async def api_airport(icao: str):
 
 
 async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
-    route = await redisVRS.get_route(callsign)
-    is_plausible = await redisVRS.is_plausible(callsign)
-    if is_plausible:
-        route["plausible"] = is_plausible
+    route = await redisVRS.get_cached_route(callsign)
+    if route:
         return route
+
+    route = await redisVRS.get_route(callsign)
 
     if route["airport_codes"] == "unknown":
         return route
@@ -59,8 +59,8 @@ async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
         )
         a = b  # try the next pair in mult segment routes
     print(f"==> {callsign} plausible: {is_plausible} {type(is_plausible)}")
-    await redisVRS.set_plausible(callsign, int(is_plausible))
     route["plausible"] = is_plausible
+    await redisVRS.cache_route(callsign, is_plausible, route)
     return route
 
 
