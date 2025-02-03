@@ -22,32 +22,7 @@ from adsb_api.utils.settings import (INGEST_DNS, INGEST_HTTP_PORT,
 
 
 class Base:
-    async def _lock(self, name):
-        key = f"lock:{name}"
-        value = gethostname()
-
-        if  not isinstance(self.redis, redis.Redis):
-            print("Lock: Redis is not connected")
-            return False
-        try:
-            print(f"Trying to Lock {key} as {value}")
-            if await self.redis.set(key, value, nx=True, ex=10):
-                print(f"Locked {key}:{value}")
-                return True
-
-            current_locker = await self.redis.get(key)
-            if current_locker is None:
-                print(f"Lock {name} is not locked")
-                return False
-            current_locker = current_locker.decode()
-            if current_locker == value:
-                print(f"Already Locked {key}")
-                return True
-            print(f"Lock {name} is locked by {current_locker}")
-            return False
-        except Exception as e:
-            print("Error Locking:", e)
-            return False
+    ...
 class Provider(Base):
     def __init__(self, enabled_bg_tasks):
         self.aircrafts = {}
@@ -100,10 +75,6 @@ class Provider(Base):
     async def fetch_hub_stats(self):
         try:
             while True:
-                if not await self._lock("hub_stats"):
-                    print(f"hub_stats not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     async with self.client_session.get(STATS_URL) as resp:
                         data = await resp.json()
@@ -119,10 +90,6 @@ class Provider(Base):
     async def fetch_ingest(self):
         try:
             while True:
-                if not await self._lock("ingest"):
-                    print(f"ingest not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     ips = [
                         record.host
@@ -173,10 +140,6 @@ class Provider(Base):
     async def fetch_mlat(self):
         try:
             while True:
-                if not await self._lock("mlat"):
-                    print(f"mlat not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     data_per_server = {}
                     for server in MLAT_SERVERS:
@@ -399,10 +362,6 @@ class RedisVRS(Base):
     async def _background_task(self):
         try:
             while True:
-                if not await self._lock("background_vrs"):
-                    print(f"background_vrs not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     await self.download_csv_to_import()
                     await asyncio.sleep(3600)
@@ -554,10 +513,6 @@ class FeederData(Base):
     async def _background_task(self):
         try:
             while True:
-                if not await self._lock("background_feederdata"):
-                    print(f"background_feederdata not Locked...")
-                    await asyncio.sleep(5)
-                    continue
                 try:
                     ips = [
                         record.host
