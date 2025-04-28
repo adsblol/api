@@ -16,13 +16,20 @@ import orjson
 import redis.asyncio as redis
 
 from adsb_api.utils.reapi import ReAPI
-from adsb_api.utils.settings import (INGEST_DNS, INGEST_HTTP_PORT,
-                                     MLAT_SERVERS, REAPI_ENDPOINT, SALT_MLAT,
-                                     SALT_MY, STATS_URL)
+from adsb_api.utils.settings import (
+    INGEST_DNS,
+    INGEST_HTTP_PORT,
+    MLAT_SERVERS,
+    REAPI_ENDPOINT,
+    SALT_MLAT,
+    SALT_MY,
+    STATS_URL,
+)
 
 
-class Base:
-    ...
+class Base: ...
+
+
 class Provider(Base):
     def __init__(self, enabled_bg_tasks):
         self.aircrafts = {}
@@ -42,7 +49,6 @@ class Provider(Base):
             {"name": "fetch_mlat", "task": self.fetch_mlat, "instance": None},
         ]
         self.enabled_bg_tasks = enabled_bg_tasks
-
 
     async def startup(self):
         self.redis = await redis.from_url(self.redis_connection_string)
@@ -240,7 +246,9 @@ class Provider(Base):
                     try:
                         if isinstance(client["uuid"], list):
                             clients_list[-1]["uuid"] = (
-                                client["uuid"][0][:13] + "-..." if client["uuid"] else None
+                                client["uuid"][0][:13] + "-..."
+                                if client["uuid"]
+                                else None
                             )
                         elif isinstance(client["uuid"], str):
                             clients_list[-1]["uuid"] = (
@@ -496,19 +504,23 @@ class FeederData(Base):
         await pipeline.execute()
 
     async def _update_aircrafts(self, ip):
-        # Update aircrafts list
-        # If redis_aircrafts_updated_at is more than 1s ago, update it
-        url = f"http://{ip}:{INGEST_HTTP_PORT}/"
-        async with self.client_session.get(url + "aircraft.json") as resp:
-            data = await resp.json()
-            self.ingest_aircrafts[ip] = data
+        try:
+            # Update aircrafts list
+            # If redis_aircrafts_updated_at is more than 1s ago, update it
+            url = f"http://{ip}:{INGEST_HTTP_PORT}/"
+            async with self.client_session.get(url + "aircraft.json") as resp:
+                data = await resp.json()
+                self.ingest_aircrafts[ip] = data
 
-        # If redis_aircrafts_updated_at is more than 1s ago, update it
-        # We do this by exiting here if it has been updated recently
-        if datetime.now().timestamp() - self.redis_aircrafts_updated_at > 0.5:
-            self.redis_aircrafts_updated_at = datetime.now().timestamp()
-            # print("xxx trying to update redis aircrafts")
-            await self._update_redis_aircrafts(ip)
+            # If redis_aircrafts_updated_at is more than 1s ago, update it
+            # We do this by exiting here if it has been updated recently
+            if datetime.now().timestamp() - self.redis_aircrafts_updated_at > 0.5:
+                self.redis_aircrafts_updated_at = datetime.now().timestamp()
+                # print("xxx trying to update redis aircrafts")
+                await self._update_redis_aircrafts(ip)
+        except:
+            print("Error in _update_aircrafts", ip)
+            traceback.print_exc()
 
     async def _background_task(self):
         try:
