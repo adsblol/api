@@ -494,7 +494,7 @@ class FeederData(Base):
         self.redis_aircrafts_updated_at = datetime.now().timestamp()
         pipeline = self.redis.pipeline()
         aircrafts = self.ingest_aircrafts[ip]["aircraft"]
-        # print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
+        print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
         for aircraft in aircrafts:
             pipeline = pipeline.set(
                 f"ac:{ip}:{aircraft['hex']}",
@@ -552,10 +552,10 @@ class FeederData(Base):
                     pipeline = self._try_updating_receivers_ingests(
                         pipeline, receivers_ingests
                     )
-                    # print("Pipeline: ", pipeline)
+                    print("Pipeline: ", pipeline)
                     await pipeline.execute()
 
-                    # print("FeederData: Got data from", receivers, "receivers")
+                    print("FeederData: Got data from", receivers, "receivers")
 
                     await asyncio.sleep(0.1)
 
