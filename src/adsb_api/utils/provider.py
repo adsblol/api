@@ -523,48 +523,47 @@ class FeederData(Base):
             traceback.print_exc()
 
     async def _background_task(self):
+        # asnycio timeout, so it only runs for 10 secs then cancels
         try:
             while True:
-                try:
-                    ips = [
-                        record.host
-                        for record in (await self.resolver.query(INGEST_DNS, "A"))
-                    ]
-                    receivers = 0
-                    receivers_ingests = {}
-                    for ip in list(self.ingest_aircrafts.keys()):
-                        if ip not in ips:
-                            del self.ingest_aircrafts[ip]
-                    for ip in ips:
-                        await self._update_aircrafts(ip)
-                        data = self.ingest_aircrafts[ip]
-                        pipeline = self.redis.pipeline()
-                        for aircraft in data["aircraft"]:
-                            for receiver in aircraft.get("recentReceiverIds", []):
-                                receivers += 1
-                                receivers_ingests[receiver] = ip
-                                # zadd to key with score=now,
-                                key = f"receiver_ac:{receiver}"
-                                pipeline = pipeline.zadd(
-                                    key,
-                                    {aircraft["hex"]: int(datetime.now().timestamp())},
-                                )
-                    pipeline = self._try_updating_receivers_ingests(
-                        pipeline, receivers_ingests
-                    )
-                    print("Pipeline: ", pipeline)
-                    await pipeline.execute()
-
-                    print("FeederData: Got data from", receivers, "receivers")
-
-                    await asyncio.sleep(0.1)
-
-                except Exception as e:
-                    traceback.print_exc()
-                    print("Error in background task, retry in 5s:", e)
-                    await asyncio.sleep(5)
+                async with asyncio.timeout(10):
+                    await self._background_task_exc()
         except asyncio.CancelledError:
-            print("FeederData cancelled")
+            print("FeederData background task cancelled")
+        except Exception as e:
+            print("FeederData background task error:", e)
+            traceback.print_exc()
+            await asyncio.sleep(5)
+            await self._background_task()
+
+    async def _background_task_exc(self):
+        ips = [record.host for record in (await self.resolver.query(INGEST_DNS, "A"))]
+        receivers = 0
+        receivers_ingests = {}
+        for ip in list(self.ingest_aircrafts.keys()):
+            if ip not in ips:
+                del self.ingest_aircrafts[ip]
+        for ip in ips:
+            await self._update_aircrafts(ip)
+            data = self.ingest_aircrafts[ip]
+            pipeline = self.redis.pipeline()
+            for aircraft in data["aircraft"]:
+                for receiver in aircraft.get("recentReceiverIds", []):
+                    receivers += 1
+                    receivers_ingests[receiver] = ip
+                    # zadd to key with score=now,
+                    key = f"receiver_ac:{receiver}"
+                    pipeline = pipeline.zadd(
+                        key,
+                        {aircraft["hex"]: int(datetime.now().timestamp())},
+                    )
+        pipeline = self._try_updating_receivers_ingests(pipeline, receivers_ingests)
+        print("Pipeline: ", pipeline)
+        await pipeline.execute()
+
+        print("FeederData: Got data from", receivers, "receivers")
+
+        await asyncio.sleep(0.1)
 
     def _try_updating_receivers_ingests(self, pipeline, receivers_ingests):
         if datetime.now().timestamp() - self.receivers_ingests_updated_at < 0.2:
