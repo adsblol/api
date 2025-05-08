@@ -524,17 +524,16 @@ class FeederData(Base):
 
     async def _background_task(self):
         # asnycio timeout, so it only runs for 10 secs then cancels
-        try:
-            while True:
+        while True:
+            try:
                 async with asyncio.timeout(10):
                     await self._background_task_exc()
-        except asyncio.CancelledError:
-            print("FeederData background task cancelled")
-        except Exception as e:
-            print("FeederData background task error:", e)
-            traceback.print_exc()
+            except asyncio.CancelledError:
+                print("FeederData background task cancelled")
+            except Exception as e:
+                print("FeederData background task error:", e)
+                traceback.print_exc()
             await asyncio.sleep(5)
-            await self._background_task()
 
     async def _background_task_exc(self):
         ips = [record.host for record in (await self.resolver.query(INGEST_DNS, "A"))]
