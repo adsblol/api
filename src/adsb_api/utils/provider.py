@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime
 from functools import lru_cache
 from socket import gethostname
+from email.utils import parsedate_to_datetime
 
 import aiodns
 import aiohttp
@@ -148,6 +149,7 @@ class Provider(Base):
             while True:
                 try:
                     data_per_server = {}
+                    updated_at_per_server = {}
                     for server in MLAT_SERVERS:
                         # server is "mlat-mlat-server-0a"
                         # let's take just 0a and make it uppercase
@@ -158,13 +160,17 @@ class Provider(Base):
                             data_per_server[this] = self.anonymize_mlat_data(
                                 await resp.json()
                             )
+                            if modified := resp.headers.get("Last-Modified"):
+                                updated_at_per_server[this] = parsedate_to_datetime(
+                                    modified
+                                ).timestamp()
                     self.mlat_totalcount_json = {
                         "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
                     }
                     for this, data in data_per_server.items():
+                        updated_at = updated_at_per_server.get(this, 0)
                         self.mlat_sync_json[this] = data
-                        self.mlat_totalcount_json[this] = [len(data), 1337,
-                                                           datetime.now().timestamp()] 
+                        self.mlat_totalcount_json[this] = [len(data), 1337, updated_at]
 
                     # now, we take care of the clients
                     SENSITIVE_clients = {}
