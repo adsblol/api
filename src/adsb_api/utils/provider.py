@@ -164,7 +164,7 @@ class Provider(Base):
                     for this, data in data_per_server.items():
                         self.mlat_sync_json[this] = data
                         self.mlat_totalcount_json[this] = [len(data), 1337,
-                                                           datetime.now()] 
+                                                           datetime.now().timestamp()] 
 
                     # now, we take care of the clients
                     SENSITIVE_clients = {}
