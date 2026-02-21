@@ -12,9 +12,9 @@ Interactive documentation for the API lives at [api.adsb.lol/docs](https://api.a
 
 ## Rate limits
 
-Currently, there are no rate limits on the API. If you are using the API in a production environment, let me know so I don't break your app in case the API changes.
+Rate limits are dynamic based on the environment load. 
 
-In the future, I may add rate limits to the API.
+If you get 4xx errors, you are doing something wrong. 
 
 In the future, you will require an API key which you can obtain by [feeding adsb.lol](https://adsb.lol/feed).
 
