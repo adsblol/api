@@ -147,50 +147,46 @@ class Provider(Base):
     async def fetch_mlat(self):
         try:
             while True:
-                try:
-                    data_per_server = {}
-                    updated_at_per_server = {}
-                    for server in MLAT_SERVERS:
-                        # server is "mlat-mlat-server-0a"
-                        # let's take just 0a and make it uppercase
-                        this = server.split("-")[-1].upper()
+                data_per_server = {}
+                updated_at_per_server = {}
+                clients_per_server = {}
+
+                async def fetch_one(server):
+                    this = server.split("-")[-1].upper()
+                    try:
                         async with self.client_session.get(
-                            f"http://{server}:150/sync.json"
+                            f"http://{server}:150/sync.json", timeout=aiohttp.ClientTimeout(total=10)
                         ) as resp:
-                            data_per_server[this] = self.anonymize_mlat_data(
-                                await resp.json()
-                            )
+                            data_per_server[this] = self.anonymize_mlat_data(await resp.json())
                             if modified := resp.headers.get("Last-Modified"):
-                                updated_at_per_server[this] = parsedate_to_datetime(
-                                    modified
-                                ).timestamp()
-                    self.mlat_totalcount_json = {
-                        "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
-                    }
-                    for this, data in data_per_server.items():
-                        updated_at = updated_at_per_server.get(this, 0)
-                        self.mlat_sync_json[this] = data
-                        self.mlat_totalcount_json[this] = [len(data), 1337, updated_at]
+                                updated_at_per_server[this] = parsedate_to_datetime(modified).timestamp()
+                    except Exception as e:
+                        print(f"Error fetching sync from {server}: {e}")
 
-                    # now, we take care of the clients
-                    SENSITIVE_clients = {}
-                    # we put for each server the clients
-                    for server in MLAT_SERVERS:
-                        this = server.split("-")[-1].upper()
+                    try:
                         async with self.client_session.get(
-                            f"http://{server}:150/clients.json"
+                            f"http://{server}:150/clients.json", timeout=aiohttp.ClientTimeout(total=10)
                         ) as resp:
-                            data = await resp.json()
-                            SENSITIVE_clients[this] = data
-                    self.mlat_clients = SENSITIVE_clients
+                            clients_per_server[this] = await resp.json()
+                    except Exception as e:
+                        print(f"Error fetching clients from {server}: {e}")
 
-                    await asyncio.sleep(5)
-                except Exception as e:
-                    traceback.print_exc()
-                    print("Error in fetching mlat, retry in 10s:", e)
-                    await asyncio.sleep(10)
+                await asyncio.gather(*(fetch_one(server) for server in MLAT_SERVERS))
+
+                self.mlat_totalcount_json = {
+                    "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
+                }
+                for this, data in data_per_server.items():
+                    updated_at = updated_at_per_server.get(this, 0)
+                    self.mlat_sync_json[this] = data
+                    self.mlat_totalcount_json[this] = [len(data), 1337, updated_at]
+
+                self.mlat_clients = clients_per_server
+
+                await asyncio.sleep(5)
         except asyncio.CancelledError:
             print("Background task cancelled")
+
 
     async def set_beast_clients(self, client_rows):
         """Deduplicating setter."""
