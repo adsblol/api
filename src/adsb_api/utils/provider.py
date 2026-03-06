@@ -5,6 +5,7 @@ import hashlib
 import re
 import traceback
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from functools import lru_cache
 from socket import gethostname
@@ -27,14 +28,64 @@ from adsb_api.utils.settings import (
     STATS_URL,
 )
 
+_HOSTNAME = gethostname()
+
+
+async def _acquire_lock(r: redis.Redis, name: str, ttl: int = 10) -> bool:
+    """Try to acquire a distributed lock. Returns True if acquired."""
+    lock_key = f"lock:{name}"
+    lock_value = f"{_HOSTNAME}:{uuid.uuid4()}"
+    return await r.set(lock_key, lock_value, nx=True, ex=ttl)
+
+
+async def _release_lock(r: redis.Redis, name: str):
+    """Release a distributed lock (only if we own it)."""
+    lock_key = f"lock:{name}"
+    lock_value = f"{_HOSTNAME}:"
+    # Use Lua to ensure we only delete our own lock
+    lua = "if redis.call('get', KEYS[1]) and redis.call('get', KEYS[1]):find(ARGV[1]) == 1 then return redis.call('del', KEYS[1]) else return 0 end"
+    await r.eval(lua, 1, lock_key, lock_value)
+
 
 class Base: ...
 
 
+def _parse_route(vrsroute: str, callsign: str, get_airport_fn) -> dict:
+    """Parse route CSV and fetch airports."""
+    _, code, number, airlinecode, airportcodes = vrsroute.split(",")
+    airports = airportcodes.split("-")
+
+    return {
+        "callsign": callsign,
+        "number": number,
+        "airline_code": airlinecode,
+        "airport_codes": airportcodes,
+        "_airport_codes_iata": airportcodes,
+        "_airports": [],
+    }
+
+
+async def _enrich_route(route: dict, get_airport_fn) -> dict:
+    """Add airport data to route."""
+    if route["airport_codes"] == "unknown":
+        return route
+
+    airports = route["airport_codes"].split("-")
+    airport_data = await asyncio.gather(*(get_airport_fn(a) for a in airports))
+
+    route["_airports"] = [a for a in airport_data if a]
+    route["_airport_codes_iata"] = route["airport_codes"]
+
+    for ap, data in zip(airports, airport_data):
+        if data and len(ap) == 4 and len(data.get("iata", "")) == 3:
+            route["_airport_codes_iata"] = route["_airport_codes_iata"].replace(ap, data["iata"])
+
+    return route
+
+
 class Provider(Base):
     def __init__(self, enabled_bg_tasks):
-        self.aircrafts = {}
-        self.beast_clients = list()
+        self.beast_clients = []
         self.beast_receivers = []
         self.mlat_sync_json = {}
         self.mlat_totalcount_json = {}
@@ -44,262 +95,136 @@ class Provider(Base):
         self.resolver = None
         self.redis = None
         self.redis_connection_string = None
-        self.bg_tasks = [
-            {"name": "fetch_hub_stats", "task": self.fetch_hub_stats, "instance": None},
-            {"name": "fetch_ingest", "task": self.fetch_ingest, "instance": None},
-            {"name": "fetch_mlat", "task": self.fetch_mlat, "instance": None},
-        ]
         self.enabled_bg_tasks = enabled_bg_tasks
+        self._bg_tasks = []
+        self._session = None
 
     async def startup(self):
         self.redis = await redis.from_url(self.redis_connection_string)
-        self.client_session = aiohttp.ClientSession(
-            raise_for_status=True,
+        self._session = aiohttp.ClientSession(
+            raise_for_status=False,  # Don't raise on 4xx/5xx
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
         self.resolver = aiodns.DNSResolver()
-        for task in self.bg_tasks:
-            if task["name"] not in self.enabled_bg_tasks:
-                continue
-            task["instance"] = asyncio.create_task(task["task"]())
-            print(f"Started background task {task['name']}")
+
+        tasks = []
+        if "fetch_hub_stats" in self.enabled_bg_tasks:
+            tasks.append(asyncio.create_task(self._fetch_hub_stats()))
+        if "fetch_ingest" in self.enabled_bg_tasks:
+            tasks.append(asyncio.create_task(self._fetch_ingest()))
+        if "fetch_mlat" in self.enabled_bg_tasks:
+            tasks.append(asyncio.create_task(self._fetch_mlat()))
+        self._bg_tasks = tasks
 
     async def shutdown(self):
-        for task in self.bg_tasks:
-            if task["instance"] is not None:
-                task["instance"].cancel()
-                await task["instance"]
+        for t in self._bg_tasks:
+            t.cancel()
+        await asyncio.gather(*self._bg_tasks, return_exceptions=True)
+        await self._session.close()
 
-        await self.client_session.close()
-
-    # since there are multiple instances of the same API, we lock certain redis operations
-    # we lock it to the hostname, because it's unique
-    # we expire it after 10 seconds, because we don't want to lock it forever
-    # each lock has a name (hub_stats, ingest, mlat, ...)
-    # the lock returns True if it was able to lock it OR if it is locked by the same hostname
-    # the lock returns False if it is locked by another hostname
-
-    async def fetch_hub_stats(self):
-        try:
-            while True:
+    async def _fetch_hub_stats(self):
+        while True:
+            if await _acquire_lock(self.redis, "hub_stats", ttl=10):
                 try:
-                    async with self.client_session.get(STATS_URL) as resp:
-                        data = await resp.json()
-                    self.aircraft_totalcount = data["aircraft_with_pos"]
-                    await asyncio.sleep(10)
+                    async with self._session.get(STATS_URL) as resp:
+                        if resp.status == 200:
+                            self.aircraft_totalcount = (await resp.json())["aircraft_with_pos"]
                 except Exception as e:
-                    traceback.print_exc()
-                    print("Error fetching stats, retry in 10s:", e)
-                    await asyncio.sleep(10)
-        except asyncio.CancelledError:
-            print("Background task cancelled")
+                    print(f"Error fetching stats: {e}")
+                finally:
+                    await _release_lock(self.redis, "hub_stats")
+            await asyncio.sleep(10)
 
-    async def fetch_ingest(self):
-        try:
-            while True:
+    async def _fetch_ingest(self):
+        while True:
+            if await _acquire_lock(self.redis, "ingest", ttl=8):
                 try:
-                    ips = [
-                        record.host
-                        for record in (await self.resolver.query(INGEST_DNS, "A"))
-                    ]
-                    clients, receivers = [], []
-                    # beast update
-                    for ip in ips:
-                        url = f"http://{ip}:{INGEST_HTTP_PORT}/"
+                    ips = [r.host for r in (await self.resolver.query(INGEST_DNS, "A"))]
+                    results = await asyncio.gather(*(self._fetch_one_ingest(ip) for ip in ips))
 
-                        async with self.client_session.get(
-                            url + "clients.json"
-                        ) as resp:
-                            data = await resp.json()
-                            clients += data["clients"]
-                            # print(len(clients), "clients")
+                    clients = [c for r in results if r for c in r.get("clients", [])]
+                    receivers = [r for res in results if res for r in res.get("receivers", [])]
 
-                        async with self.client_session.get(
-                            url + "receivers.json"
-                        ) as resp:
-                            data = await resp.json()
-                            pipeline = self.redis.pipeline()
-                            for receiver in data["receivers"]:
-                                key = f"receiver:{receiver[0]}"
-                                pipeline = pipeline.set(
-                                    key, orjson.dumps(receiver), ex=60
-                                )
-                                # set the humanhashy of salted my uuid
-                                my_humanhashy = self._humanhashy(receiver[0], SALT_MY)
-                                pipeline = pipeline.set(
-                                    f"my:{my_humanhashy}", receiver[0], ex=60
-                                )
-                                lat, lon = round(receiver[8], 1), round(receiver[9], 1)
-                                receivers.append([receiver[0], lat, lon])
-                            await pipeline.execute()
-
-                    await self.set_beast_clients(clients)
+                    self.beast_clients = list(_dedupe_clients(clients))
                     self.beast_receivers = receivers
-
-                    await asyncio.sleep(5)
                 except Exception as e:
+                    print(f"Error fetching ingest: {e}")
                     traceback.print_exc()
-                    print("Error fetching ingest, retry in 10s:", e)
-                    await asyncio.sleep(10)
-        except asyncio.CancelledError:
-            print("Background task cancelled")
+                finally:
+                    await _release_lock(self.redis, "ingest")
+            await asyncio.sleep(5)
 
-    async def fetch_mlat(self):
+    async def _fetch_one_ingest(self, ip: str) -> dict | None:
         try:
-            while True:
-                data_per_server = {}
-                updated_at_per_server = {}
-                clients_per_server = {}
+            url = f"http://{ip}:{INGEST_HTTP_PORT}/"
+            clients, receivers = None, None
 
-                async def fetch_one(server):
-                    this = server.split("-")[-1].upper()
-                    try:
-                        async with self.client_session.get(
-                            f"http://{server}:150/sync.json", timeout=aiohttp.ClientTimeout(total=10)
-                        ) as resp:
-                            data_per_server[this] = self.anonymize_mlat_data(await resp.json())
-                            if modified := resp.headers.get("Last-Modified"):
-                                updated_at_per_server[this] = parsedate_to_datetime(modified).timestamp()
-                    except Exception as e:
-                        print(f"Error fetching sync from {server}: {e}")
+            async def fetch_clients():
+                nonlocal clients
+                async with self._session.get(url + "clients.json") as resp:
+                    if resp.status == 200:
+                        clients = (await resp.json()).get("clients", [])
 
-                    try:
-                        async with self.client_session.get(
-                            f"http://{server}:150/clients.json", timeout=aiohttp.ClientTimeout(total=10)
-                        ) as resp:
-                            clients_per_server[this] = await resp.json()
-                    except Exception as e:
-                        print(f"Error fetching clients from {server}: {e}")
+            async def fetch_receivers():
+                nonlocal receivers
+                async with self._session.get(url + "receivers.json") as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        receivers = data.get("receivers", [])
+                        # Pipeline redis writes
+                        pipe = self.redis.pipeline()
+                        for recv in receivers:
+                            uuid = recv[0]
+                            pipe.set(f"receiver:{uuid}", orjson.dumps(recv), ex=60)
+                            hh = _humanhashy_cached(uuid, SALT_MY)
+                            pipe.set(f"my:{hh}", uuid, ex=60)
+                        await pipe.execute()
 
-                await asyncio.gather(*(fetch_one(server) for server in MLAT_SERVERS))
+            await asyncio.gather(fetch_clients(), fetch_receivers())
 
-                self.mlat_totalcount_json = {
-                    "UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"),
-                }
-                for this, data in data_per_server.items():
-                    updated_at = updated_at_per_server.get(this, 0)
-                    self.mlat_sync_json[this] = data
-                    self.mlat_totalcount_json[this] = [len(data), 1337, updated_at]
+            if receivers:
+                for r in receivers:
+                    r[8], r[9] = round(r[8], 1), round(r[9], 1)  # lat, lon
 
-                self.mlat_clients = clients_per_server
+            return {"clients": clients, "receivers": receivers}
+        except Exception as e:
+            print(f"Error fetching ingest {ip}: {e}")
+            return None
 
-                await asyncio.sleep(5)
-        except asyncio.CancelledError:
-            print("Background task cancelled")
+    async def _fetch_mlat(self):
+        while True:
+            if await _acquire_lock(self.redis, "mlat", ttl=8):
+                try:
+                    data, clients = {}, {}
 
+                    async def fetch_server(server):
+                        sv = server.split("-")[-1].upper()
+                        try:
+                            async with self._session.get(f"http://{server}:150/sync.json", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                if resp.status == 200:
+                                    data[sv] = _anonymize_mlat(await resp.json())
+                            async with self._session.get(f"http://{server}:150/clients.json", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                if resp.status == 200:
+                                    clients[sv] = await resp.json()
+                        except Exception:
+                            pass
 
-    async def set_beast_clients(self, client_rows):
-        """Deduplicating setter."""
-        clients = {}
+                    await asyncio.gather(*(fetch_server(s) for s in MLAT_SERVERS))
 
-        for client in client_rows:
-            my_url = (
-                "https://" + self._humanhashy(client[0][:18], SALT_MY) + ".my.adsb.lol"
-            )
-            clients[(client[0], client[1].split()[1])] = {  # deduplicate by hex and ip
-                # "adsblol_beast_id": self.salty_uuid(client[0], SALT_BEAST),
-                # "adsblol_beast_hash": self._humanhashy(client[0], SALT_BEAST),
-                "uuid": client[0][:13] + "-...",
-                "_uuid": client[0],
-                "adsblol_my_url": my_url,
-                "ip": client[1].split()[1],
-                "kbps": client[2],
-                "connected_seconds": client[3],
-                "messages_per_second": client[4],
-                "positions_per_second": client[5],
-                "positions": client[8],
-                "ms": client[7],
-            }
+                    self.mlat_sync_json = data
+                    self.mlat_clients = clients
+                    self.mlat_totalcount_json = {"UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y")}
+                    for sv, d in data.items():
+                        self.mlat_totalcount_json[sv] = [len(d), 1337, 0]
+                except Exception as e:
+                    print(f"Error fetching mlat: {e}")
+                finally:
+                    await _release_lock(self.redis, "mlat")
+            await asyncio.sleep(5)
 
-        self.beast_clients = clients.values()
-
-    # def try_updating_redis_entry(self, key, value, salt, expiry=60):
-    #     """
-    #     Try to update redis entry with key and salt.
-    #     """
-    #     try:
-    #         key = key + ":" + value
-    #         self.redis.set(key, self.salty_uuid(key, salt), ex=expiry)
-    #     except Exception as e:
-    #         print("Error updating redis entry:", e)
-
-    def mlat_clients_to_list(self, ip=None):
-        """
-        Return mlat clients with specified ip.
-        """
-        clients_list = []
-        keys_to_copy = [
-            "user",
-            "privacy",
-            "connection",
-            "peer_count",
-            "bad_sync_timeout",
-            "outlier_percent",
-        ]
-        # format of mlat_clients:
-        # { "0A": {"user": {data}}, "0B": {"user": {data}}
-        for server, data in self.mlat_clients.items():
-            # for name, client in self.mlat_clients.items():
-            for name, client in data.items():
-                if ip is not None and client["source_ip"] == ip:
-                    clients_list.append(
-                        {key: client[key] for key in keys_to_copy if key in client}
-                    )
-                    # for uuid, special handle because it's a list OR a string.
-                    try:
-                        if isinstance(client["uuid"], list):
-                            clients_list[-1]["uuid"] = (
-                                client["uuid"][0][:13] + "-..."
-                                if client["uuid"]
-                                else None
-                            )
-                        elif isinstance(client["uuid"], str):
-                            clients_list[-1]["uuid"] = (
-                                client["uuid"][:13] + "-..." if client["uuid"] else None
-                            )
-                        else:
-                            clients_list[-1]["uuid"] = None
-                    except:
-                        clients_list[-1]["uuid"] = None
-        return clients_list
-
-    def anonymize_mlat_data(self, data):
-        sanitized_data = {}
-        for name, value in data.items():
-            sanitised_peers = {}
-            for peer, peer_value in value["peers"].items():
-                sanitised_peers[self.maybe_salty_uuid(peer, SALT_MLAT)] = peer_value
-
-            sanitized_data[self.maybe_salty_uuid(name, SALT_MLAT)] = {
-                "lat": value["lat"],
-                "lon": value["lon"],
-                "bad_syncs": value.get("bad_syncs", -1),
-                "peers": sanitised_peers,
-            }
-
-        return sanitized_data
-
-    def get_clients_per_client_ip(self, ip: str, hide: bool = True) -> list:
-        """
-        Return Beast clients with specified ip.
-        :param ip: IP address to filter on.
-        :param hide: Whether to keys that starts with _.
-        """
-        ret = [client for client in self.beast_clients if client["ip"] == ip]
-        if hide:
-            ret = [
-                {k: v for k, v in client.items() if not k.startswith("_")}
-                for client in ret
-            ]
-            # sort by uuid
-            ret.sort(key=lambda x: x["uuid"])
-        return ret
-
-    def get_clients_per_key_name(self, key_name: str, value: str) -> list:
-        """
-        Return Beast clients with specified key name.
-        """
-        return [client for client in self.beast_clients if client[key_name] == value]
+    def get_clients_per_client_ip(self, ip: str) -> list:
+        return [{k: v for k, v in c.items() if not k.startswith("_")}
+                for c in self.beast_clients if c["ip"] == ip]
 
     @lru_cache(maxsize=1024)
     def salty_uuid(self, original_uuid: str, salt: str) -> str:
@@ -307,354 +232,258 @@ class Provider(Base):
         hashed_bytes = hashlib.sha3_256(salted_bytes).digest()
         return str(uuid.UUID(bytes=hashed_bytes[:16]))
 
-    def maybe_salty_uuid(self, string_that_might_contain_uuid: str, salt: str) -> str:
-        # If the string is a UUID, return a salty UUID
-        # If the string contains an UUID, return a salty UUID of the UUID, but with the rest of the string
-        try:
-            return self.salty_uuid(str(uuid.UUID(string_that_might_contain_uuid)), salt)
-        except:
-            try:
-                return re.sub(
-                    r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
-                    lambda match: self.salty_uuid(str(uuid.UUID(match.group(1))), salt),
-                    string_that_might_contain_uuid,
-                )
-            except:
-                return string_that_might_contain_uuid
-
     @lru_cache(maxsize=1024)
-    def _humanhashy(self, original_uuid: str, salt: str = None, words: int = 4) -> str:
-        """
-        Return a human readable hash of a UUID. The salt is optional.
-        """
-        if salt:
-            original_uuid = self.salty_uuid(original_uuid, salt)
-        # print("humanhashy", original_uuid, salt)
-        return humanhash.humanize(original_uuid.replace("-", ""), words=words)
+    def _humanhashy(self, original_uuid: str, salt: str = None) -> str:
+        uuid = self.salty_uuid(original_uuid, salt) if salt else original_uuid
+        return humanhash.humanize(uuid.replace("-", ""), words=4)
+
+
+def _humanhashy_cached(uuid: str, salt: str) -> str:
+    return humanhash.humanize(uuid.replace("-", ""), words=4)
+
+
+def _dedupe_clients(clients: list) -> dict:
+    deduped = {}
+    for c in clients:
+        key = (c[0], c[1].split()[1])  # uuid, ip
+        if key not in deduped:
+            my_url = f"https://{_humanhashy_cached(c[0][:18], SALT_MY)}.my.adsb.lol"
+            deduped[key] = {
+                "uuid": c[0][:13] + "-...",
+                "_uuid": c[0],
+                "adsblol_my_url": my_url,
+                "ip": c[1].split()[1],
+                "kbps": c[2],
+                "connected_seconds": c[3],
+                "messages_per_second": c[4],
+                "positions_per_second": c[5],
+                "positions": c[8],
+                "ms": c[7],
+            }
+    return deduped.values()
+
+
+def _anonymize_mlat(data: dict) -> dict:
+    result = {}
+    for name, value in data.items():
+        salty_name = _salty_uuid_cached(name, SALT_MLAT)
+        peers = {_salty_uuid_cached(p, SALT_MLAT): v for p, v in value.get("peers", {}).items()}
+        result[salty_name] = {
+            "lat": value["lat"],
+            "lon": value["lon"],
+            "bad_syncs": value.get("bad_syncs", -1),
+            "peers": peers,
+        }
+    return result
+
+
+@lru_cache(maxsize=1024)
+def _salty_uuid_cached(uuid: str, salt: str) -> str:
+    salted_bytes = uuid.encode() + salt.encode()
+    return str(uuid.UUID(bytes=hashlib.sha3_256(salted_bytes).digest()[:16]))
 
 
 class RedisVRS(Base):
-    def __init__(self, redis=None):
-        self.redis_connection_string = redis
+    def __init__(self):
+        self.redis_connection_string = None
         self.redis = None
-        self.background_task = None
+        self._bg_task = None
+
+    async def connect(self):
+        self.redis = await redis.from_url(self.redis_connection_string)
 
     async def shutdown(self):
-        self.background_task.cancel()
-        await self.background_task
+        if self._bg_task:
+            self._bg_task.cancel()
+            await self._bg_task
 
-    async def download_csv_to_import(self):
-        print("vrsx download_csv_to_import")
-        CSVS = {
+    async def _bg_task_loop(self):
+        while True:
+            if await _acquire_lock(self.redis, "vrs_csv", ttl=3600):
+                try:
+                    await self._download_csvs()
+                except Exception as e:
+                    print(f"VRS bg error: {e}")
+                finally:
+                    await _release_lock(self.redis, "vrs_csv")
+                await asyncio.sleep(3600)
+            else:
+                await asyncio.sleep(60)  # Wait before retrying to acquire lock
+
+    async def dispatch_background_task(self):
+        self._bg_task = asyncio.create_task(self._bg_task_loop())
+
+    async def _download_csvs(self):
+        urls = {
             "route": "https://vrs-standing-data.adsb.lol/routes.csv.gz",
             "airport": "https://vrs-standing-data.adsb.lol/airports.csv.gz",
         }
-        async with aiohttp.ClientSession() as session:
-            for name, url in CSVS.items():
-                print("vrsx", name)
-                # Download CSV
-                async with session.get(url) as resp:
-                    if resp.status != 200:
-                        raise Exception(f"Unable to download {url}")
-                    # Decompress
-                    data = await resp.read()
-                    data = gzip.decompress(data).decode("utf-8")
-                    # Import to Redis!
-                    # upsert. key= name:column0, value=full row
-                    # make redis transaction
-                    pipeline = self.redis.pipeline()
-
-                    for row in data.splitlines():
-                        key = f"vrs:{name}:{row.split(',')[0]}"
-                        pipeline = pipeline.set(key, row)
-                    print("vrsx y", len(pipeline))
-                    await pipeline.execute()
-
-    async def _background_task(self):
-        try:
-            while True:
+        async with aiohttp.ClientSession() as sess:
+            for name, url in urls.items():
                 try:
-                    await self.download_csv_to_import()
-                    await asyncio.sleep(3600)
+                    async with sess.get(url) as resp:
+                        if resp.status != 200:
+                            continue
+                        data = gzip.decompress(await resp.read()).decode("utf-8")
+                        pipe = self.redis.pipeline()
+                        for row in data.splitlines():
+                            pipe.set(f"vrs:{name}:{row.split(',')[0]}", row)
+                        await pipe.execute()
                 except Exception as e:
-                    print("Error in background task, retry in 1800s:", e)
-                    await asyncio.sleep(1800)
-        except asyncio.CancelledError:
-            print("VRS Background task cancelled")
+                    print(f"Error downloading {name}: {e}")
 
-    async def dispatch_background_task(self):
-        self.background_task = asyncio.create_task(self._background_task())
+    async def mget(self, keys: list[str]) -> list[bytes | None]:
+        if not keys:
+            return []
+        vals = await self.redis.mget(keys)
+        return [v.decode() if v else None for v in vals]
 
-    async def connect(self):
-        print(self.redis_connection_string)
-        self.redis = await redis.from_url(self.redis_connection_string)
+    async def get_airport(self, icao: str) -> dict | None:
+        data = await self.redis.get(f"vrs:airport:{icao}")
+        if not data:
+            return None
+        try:
+            _, name, _, iata, loc, country, lat, lon, alt = list(csv.reader([data.decode()]))[0]
+            return {"name": name, "icao": icao, "iata": iata, "location": loc,
+                    "countryiso2": country, "lat": float(lat), "lon": float(lon),
+                    "alt_feet": float(alt), "alt_meters": round(float(alt) * 0.3048, 2)}
+        except:
+            return None
 
-    async def get_route(self, callsign):
+    async def get_route(self, callsign: str) -> dict:
         vrsroute = await self.redis.get(f"vrs:route:{callsign}")
-        if vrsroute is None:
-            return {
-                "callsign": callsign,
-                "number": "unknown",
-                "airline_code": "unknown",
-                "airport_codes": "unknown",
-                "_airport_codes_iata": "unknown",
-                "_airports": [],
-            }
+        if not vrsroute:
+            return {"callsign": callsign, "number": "unknown", "airline_code": "unknown",
+                    "airport_codes": "unknown", "_airport_codes_iata": "unknown", "_airports": []}
 
-        _, code, number, airlinecode, airportcodes = vrsroute.decode().split(",")
-        airports = airportcodes.split("-")
+        route = _parse_route(vrsroute.decode(), callsign, self.get_airport)
+        return await _enrich_route(route, self.get_airport)
 
-        # Parallel airport lookup
-        airport_data_list = await asyncio.gather(*(self.get_airport(a) for a in airports))
-
-        _airports = [a for a in airport_data_list if a]
-        airport_codes_iata = airportcodes
-
-        for airport, data in zip(airports, airport_data_list):
-            if data and len(airport) == 4 and len(data.get("iata", "")) == 3:
-                airport_codes_iata = airport_codes_iata.replace(airport, data["iata"])
-
-        return {
-            "callsign": callsign,
-            "number": number,
-            "airline_code": airlinecode,
-            "airport_codes": airportcodes,
-            "_airport_codes_iata": airport_codes_iata,
-            "_airports": _airports,
-        }
-
-    async def get_routes_bulk(self, callsigns: list[str]) -> dict[str, dict | None]:
-        """Bulk fetch routes with one MGET."""
+    async def get_routes_bulk(self, callsigns: list[str]) -> dict[str, dict]:
         if not callsigns:
             return {}
-
         keys = [f"vrs:route:{cs}" for cs in callsigns]
-        values = await self.mget(keys)
+        vals = await self.mget(keys)
 
         results = {}
-        for cs, vrsroute in zip(callsigns, values):
-            if vrsroute is None:
-                results[cs] = None
+        for cs, v in zip(callsigns, vals):
+            if not v:
                 continue
-
-            _, code, number, airlinecode, airportcodes = vrsroute.split(",")
-            airports = airportcodes.split("-")
-            airport_data_list = await asyncio.gather(*(self.get_airport(a) for a in airports))
-
-            _airports = [a for a in airport_data_list if a]
-            airport_codes_iata = airportcodes
-
-            for airport, data in zip(airports, airport_data_list):
-                if data and len(airport) == 4 and len(data.get("iata", "")) == 3:
-                    airport_codes_iata = airport_codes_iata.replace(airport, data["iata"])
-
-            results[cs] = {
-                "callsign": cs,
-                "number": number,
-                "airline_code": airlinecode,
-                "airport_codes": airportcodes,
-                "_airport_codes_iata": airport_codes_iata,
-                "_airports": _airports,
-            }
+            route = _parse_route(v, cs, self.get_airport)
+            results[cs] = await _enrich_route(route, self.get_airport)
         return results
 
+    async def get_cached_route(self, callsign: str) -> dict | None:
+        v = await self.redis.get(f"vrs:routecache:{callsign}")
+        return orjson.loads(v) if v else None
+
     async def get_cached_routes_bulk(self, callsigns: list[str]) -> dict[str, dict | None]:
-        """Bulk fetch cached routes."""
         if not callsigns:
             return {}
         keys = [f"vrs:routecache:{cs}" for cs in callsigns]
-        values = await self.mget(keys)
-        return {cs: (orjson.loads(v) if v else None) for cs, v in zip(callsigns, values)}
+        vals = await self.mget(keys)
+        return {cs: (orjson.loads(v) if v else None) for cs, v in zip(callsigns, vals)}
 
-    async def mget(self, keys: list[str]) -> list[bytes | None]:
-        """Helper for MGET that returns decoded values or None."""
-        if not keys:
-            return []
-        values = await self.redis.mget(keys)
-        return [v.decode() if v else None for v in values]
-
-    async def get_airport(self, icao):
-        data = await self.redis.get(f"vrs:airport:{icao}")
-        if data is None:
-            return None
-        data = data.decode()
-        # print("vrsx", icao, data)
-        try:
-            __, name, _, iata, location, countryiso2, lat, lon, alt_feet = list(
-                csv.reader([data])
-            )[0]
-            ret = {
-                "name": name,
-                "icao": icao,
-                "iata": iata,
-                "location": location,
-                "countryiso2": countryiso2,
-                "lat": float(lat),
-                "lon": float(lon),
-                "alt_feet": float(alt_feet),
-                "alt_meters": float(round(int(alt_feet) * 0.3048, 2)),
-            }
-        except:
-            # print(f"CSV-parsing: exception for {data}")
-            ret = None
-        return ret
-
-    # Add callsign to cache
-    async def cache_route(self, callsign: str, plausible, route):
-        expiry = 1200 if plausible else 60
-        value = orjson.dumps(route)
-        await self.redis.set(f"vrs:routecache:{callsign}", value, ex=expiry)
-
-    async def get_cached_route(self, callsign):
-        value = await self.redis.get(f"vrs:routecache:{callsign}")
-        if value:
-            return orjson.loads(value)
-        else:
-            return None
+    async def cache_route(self, callsign: str, plausible: bool, route: dict):
+        await self.redis.set(f"vrs:routecache:{callsign}", orjson.dumps(route), ex=1200 if plausible else 60)
 
 
 class FeederData(Base):
-    def __init__(self, redis=None):
-        self.redis_connection_string = redis
+    def __init__(self):
+        self.redis_connection_string = None
         self.redis = None
-        self.background_task = None
-        self.resolver = None
-        self.client_session = None
-        self.redis_aircrafts_updated_at = 0
-        self.receivers_ingests_updated_at = 0
+        self._bg_task = None
+        self._session = None
+        self._resolver = None
         self.ingest_aircrafts = {}
+        self._redis_updated_at = 0
+        self._receivers_updated_at = 0
 
     async def connect(self):
         self.redis = await redis.from_url(self.redis_connection_string)
-        self.resolver = aiodns.DNSResolver()
-        self.client_session = aiohttp.ClientSession(
-            raise_for_status=True,
+        self._resolver = aiodns.DNSResolver()
+        self._session = aiohttp.ClientSession(
+            raise_for_status=False,
             timeout=aiohttp.ClientTimeout(total=5.0, connect=1.0, sock_connect=1.0),
         )
 
     async def shutdown(self):
-        self.background_task.cancel()
-        await self.background_task
-        await self.client_session.close()
+        if self._bg_task:
+            self._bg_task.cancel()
+            await self._bg_task
+        await self._session.close()
 
-    async def _update_redis_aircrafts(self, ip):
-        self.redis_aircrafts_updated_at = datetime.now().timestamp()
-        pipeline = self.redis.pipeline()
-        aircrafts = self.ingest_aircrafts[ip]["aircraft"]
-        print(f"xxx updating redis aircrafts {ip} {len(aircrafts)}")
-        for aircraft in aircrafts:
-            pipeline = pipeline.set(
-                f"ac:{ip}:{aircraft['hex']}",
-                orjson.dumps(aircraft),
-                ex=10,
-            )
-        await pipeline.execute()
+    async def dispatch_background_task(self):
+        self._bg_task = asyncio.create_task(self._bg_loop())
 
-    async def _update_aircrafts(self, ip):
-        try:
-            # Update aircrafts list
-            # If redis_aircrafts_updated_at is more than 1s ago, update it
-            url = f"http://{ip}:{INGEST_HTTP_PORT}/"
-            async with self.client_session.get(url + "aircraft.json") as resp:
-                data = await resp.json()
-                self.ingest_aircrafts[ip] = data
-
-            # If redis_aircrafts_updated_at is more than 1s ago, update it
-            # We do this by exiting here if it has been updated recently
-            if datetime.now().timestamp() - self.redis_aircrafts_updated_at > 0.5:
-                self.redis_aircrafts_updated_at = datetime.now().timestamp()
-                # print("xxx trying to update redis aircrafts")
-                await self._update_redis_aircrafts(ip)
-        except:
-            print("Error in _update_aircrafts", ip)
-            traceback.print_exc()
-
-    async def _background_task(self):
-        # asnycio timeout, so it only runs for 10 secs then cancels
+    async def _bg_loop(self):
         while True:
-            try:
-                async with asyncio.timeout(10):
-                    await self._background_task_exc()
-            except asyncio.CancelledError:
-                print("FeederData background task cancelled")
-            except Exception as e:
-                print("FeederData background task error:", e)
-                traceback.print_exc()
+            if await _acquire_lock(self.redis, "feeder_data", ttl=10):
+                try:
+                    async with asyncio.timeout(10):
+                        await self._bg_tick()
+                except asyncio.TimeoutError:
+                    pass
+                except Exception as e:
+                    print(f"FeederData error: {e}")
+                    traceback.print_exc()
+                finally:
+                    await _release_lock(self.redis, "feeder_data")
             await asyncio.sleep(5)
 
-    async def _background_task_exc(self):
-        ips = [record.host for record in (await self.resolver.query(INGEST_DNS, "A"))]
-        receivers = 0
-        receivers_ingests = {}
+    async def _bg_tick(self):
+        ips = [r.host for r in (await self._resolver.query(INGEST_DNS, "A"))]
+
+        # Clean stale IPs
         for ip in list(self.ingest_aircrafts.keys()):
             if ip not in ips:
                 del self.ingest_aircrafts[ip]
-        for ip in ips:
-            await self._update_aircrafts(ip)
-            data = self.ingest_aircrafts[ip]
-            pipeline = self.redis.pipeline()
-            for aircraft in data["aircraft"]:
-                for receiver in aircraft.get("recentReceiverIds", []):
-                    receivers += 1
-                    receivers_ingests[receiver] = ip
-                    # zadd to key with score=now,
-                    key = f"receiver_ac:{receiver}"
-                    pipeline = pipeline.zadd(
-                        key,
-                        {aircraft["hex"]: int(datetime.now().timestamp())},
-                    )
-        pipeline = self._try_updating_receivers_ingests(pipeline, receivers_ingests)
-        print("Pipeline: ", pipeline)
-        await pipeline.execute()
 
-        print("FeederData: Got data from", receivers, "receivers")
+        # Parallel fetch all IPs
+        results = await asyncio.gather(*(self._fetch_aircraft(ip) for ip in ips), return_exceptions=True)
 
-        await asyncio.sleep(0.1)
+        pipe = self.redis.pipeline()
+        receivers = 0
+        receiver_ingests = {}
 
-    def _try_updating_receivers_ingests(self, pipeline, receivers_ingests):
-        if datetime.now().timestamp() - self.receivers_ingests_updated_at < 0.2:
-            # ^ if it has been updated recently, don't update it
-            return pipeline
-        self.receivers_ingests_updated_at = datetime.now().timestamp()
-        for receiver, ip in receivers_ingests.items():
-            pipeline = pipeline.zremrangebyscore(
-                f"receiver_ac:{receiver}",
-                -1,
-                int(datetime.now().timestamp() - 60),
-            )
-            pipeline = pipeline.expire(f"receiver_ac:{receiver}", 30)
-            pipeline = pipeline.set(
-                "receiver_ingest:" + receiver,
-                ip,
-                ex=30,
-            )
-        return pipeline
-
-    async def dispatch_background_task(self):
-        self.background_task = asyncio.create_task(self._background_task())
-
-    async def get_aircraft(self, receiver):
-        # get only last 10 seconds
-        data = await self.redis.zrange(
-            f"receiver_ac:{receiver}",
-            -1,
-            int(datetime.now().timestamp()),
-            byscore=True,
-        )
-        # print("get_aircraft", receiver, data)
-        if not data:
-            return None
-        ret = []
-        if ingest := await self.redis.get("receiver_ingest:" + receiver):
-            ingest = ingest.decode()
-        else:
-            print("error ingest not found")
-            return ret
-
-        for ac in data:
-            ac = ac.decode()
-            ac_data = await self.redis.get(f"ac:{ingest}:{ac}")
-            if ac_data is None:
+        for ip, data in zip(ips, results):
+            if isinstance(data, Exception) or not data:
                 continue
-            ret.append(orjson.loads(ac_data.decode()))
-        return ret
+            for ac in data.get("aircraft", []):
+                for recv in ac.get("recentReceiverIds", []):
+                    receivers += 1
+                    receiver_ingests[recv] = ip
+                    pipe.zadd(f"receiver_ac:{recv}", {ac["hex"]: int(asyncio.get_event_loop().time())})
+
+        # Clean old receiver entries
+        now = int(asyncio.get_event_loop().time())
+        for recv, ip in receiver_ingests.items():
+            pipe.zremrangebyscore(f"receiver_ac:{recv}", "-1", str(now - 60))
+            pipe.expire(f"receiver_ac:{recv}", 30)
+            pipe.set(f"receiver_ingest:{recv}", ip, ex=30)
+
+        await pipe.execute()
+
+    async def _fetch_aircraft(self, ip: str) -> dict | None:
+        try:
+            url = f"http://{ip}:{INGEST_HTTP_PORT}/aircraft.json"
+            async with self._session.get(url) as resp:
+                if resp.status == 200:
+                    self.ingest_aircrafts[ip] = await resp.json()
+                    return self.ingest_aircrafts[ip]
+        except Exception:
+            pass
+        self.ingest_aircrafts.setdefault(ip, {"aircraft": []})
+        return None
+
+    async def get_aircraft(self, receiver: str) -> list | None:
+        ingest = await self.redis.get(f"receiver_ingest:{receiver}")
+        if not ingest:
+            return None
+
+        hexes = await self.redis.zrange(f"receiver_ac:{receiver}", "-1", "+inf", byscore=True)
+        if not hexes:
+            return []
+
+        results = await asyncio.gather(*(self.redis.get(f"ac:{ingest.decode()}:{h.decode()}") for h in hexes))
+        return [orjson.loads(r) for r in results if r]
