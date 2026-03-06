@@ -392,8 +392,7 @@ class RedisVRS(Base):
     async def get_route(self, callsign):
         vrsroute = await self.redis.get(f"vrs:route:{callsign}")
         if vrsroute is None:
-            # print("vrsx didn't have data on", callsign)
-            ret = {
+            return {
                 "callsign": callsign,
                 "number": "unknown",
                 "airline_code": "unknown",
@@ -401,33 +400,78 @@ class RedisVRS(Base):
                 "_airport_codes_iata": "unknown",
                 "_airports": [],
             }
-            return ret
 
-        data = vrsroute.decode()
-        # print("vrsx", callsign, data)
-        _, code, number, airlinecode, airportcodes = data.split(",")
-        ret = {
+        _, code, number, airlinecode, airportcodes = vrsroute.decode().split(",")
+        airports = airportcodes.split("-")
+
+        # Parallel airport lookup
+        airport_data_list = await asyncio.gather(*(self.get_airport(a) for a in airports))
+
+        _airports = [a for a in airport_data_list if a]
+        airport_codes_iata = airportcodes
+
+        for airport, data in zip(airports, airport_data_list):
+            if data and len(airport) == 4 and len(data.get("iata", "")) == 3:
+                airport_codes_iata = airport_codes_iata.replace(airport, data["iata"])
+
+        return {
             "callsign": callsign,
             "number": number,
             "airline_code": airlinecode,
             "airport_codes": airportcodes,
-            "_airport_codes_iata": airportcodes,
-            "_airports": [],
+            "_airport_codes_iata": airport_codes_iata,
+            "_airports": _airports,
         }
-        # _airport_codes_iata converts ICAO to IATA if possible.
-        for airport in ret["airport_codes"].split("-"):
-            airport_data = await self.get_airport(airport)
-            if not airport_data:
-                continue
-            if len(airport) == 4:
-                # Get IATA if exists
-                if len(airport_data["iata"]) == 3:
-                    ret["_airport_codes_iata"] = ret["_airport_codes_iata"].replace(
-                        airport, airport_data["iata"]
-                    )
-            ret["_airports"].append(airport_data)
 
-        return ret
+    async def get_routes_bulk(self, callsigns: list[str]) -> dict[str, dict | None]:
+        """Bulk fetch routes with one MGET."""
+        if not callsigns:
+            return {}
+
+        keys = [f"vrs:route:{cs}" for cs in callsigns]
+        values = await self.mget(keys)
+
+        results = {}
+        for cs, vrsroute in zip(callsigns, values):
+            if vrsroute is None:
+                results[cs] = None
+                continue
+
+            _, code, number, airlinecode, airportcodes = vrsroute.split(",")
+            airports = airportcodes.split("-")
+            airport_data_list = await asyncio.gather(*(self.get_airport(a) for a in airports))
+
+            _airports = [a for a in airport_data_list if a]
+            airport_codes_iata = airportcodes
+
+            for airport, data in zip(airports, airport_data_list):
+                if data and len(airport) == 4 and len(data.get("iata", "")) == 3:
+                    airport_codes_iata = airport_codes_iata.replace(airport, data["iata"])
+
+            results[cs] = {
+                "callsign": cs,
+                "number": number,
+                "airline_code": airlinecode,
+                "airport_codes": airportcodes,
+                "_airport_codes_iata": airport_codes_iata,
+                "_airports": _airports,
+            }
+        return results
+
+    async def get_cached_routes_bulk(self, callsigns: list[str]) -> dict[str, dict | None]:
+        """Bulk fetch cached routes."""
+        if not callsigns:
+            return {}
+        keys = [f"vrs:routecache:{cs}" for cs in callsigns]
+        values = await self.mget(keys)
+        return {cs: (orjson.loads(v) if v else None) for cs, v in zip(callsigns, values)}
+
+    async def mget(self, keys: list[str]) -> list[bytes | None]:
+        """Helper for MGET that returns decoded values or None."""
+        if not keys:
+            return []
+        values = await self.redis.mget(keys)
+        return [v.decode() if v else None for v in values]
 
     async def get_airport(self, icao):
         data = await self.redis.get(f"vrs:airport:{icao}")

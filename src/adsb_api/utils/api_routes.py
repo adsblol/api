@@ -11,125 +11,80 @@ CORS_HEADERS = {
     "Access-Control-Allow-Headers": "access-control-allow-origin,content-type",
 }
 
-
-router = APIRouter(
-    prefix="/api",
-    tags=["v0"],
-)
+router = APIRouter(prefix="/api", tags=["v0"])
 
 
-@router.get(
-    "/0/airport/{icao}",
-    response_class=PrettyJSONResponse,
-    tags=["v0"],
-    summary="Airports by ICAO",
-    description="Data by https://github.com/vradarserver/standing-data/",
-)
-async def api_airport(icao: str):
-    """
-    Return information about an airport.
-    """
-    return await redisVRS.get_airport(icao)
+async def calc_plausible(route, lat: str, lng: str) -> bool:
+    """Calculate if route is plausible for given position (non-blocking)."""
+    for i in range(len(route.get("_airports", [])) - 1):
+        a, b = route["_airports"][i], route["_airports"][i + 1]
+        is_plausible, _ = await plausible(lat, lng, f"{a['lat']:.5f}", f"{a['lon']:.5f}", f"{b['lat']:.5f}", f"{b['lon']:.5f}")
+        if is_plausible:
+            return True
+    return False
 
 
-async def get_route_for_callsign_lat_lng(callsign: str, lat: str, lng: str):
-    route = await redisVRS.get_cached_route(callsign)
-    if route:
-        return route
+async def get_route_cached_or_fetch(callsign: str, lat: str, lng: str) -> dict:
+    """Get route from cache or fetch, with plausible calculation."""
+    if cached := await redisVRS.get_cached_route(callsign):
+        return cached
 
     route = await redisVRS.get_route(callsign)
-
-    if route["airport_codes"] == "unknown":
-        return route
-
-    is_plausible = False
-    # print(f"==> {callsign}:", end=" ")
-    for a in range(len(route["_airports"]) - 1):
-        b = a + 1
-        airportA = route["_airports"][a]
-        airportB = route["_airports"][b]
-        # print(f"checking {airportA['iata']}-{airportB['iata']}", end=" ")
-        is_plausible, _ = plausible(
-            lat,
-            lng,
-            f"{airportA['lat']:.5f}",
-            f"{airportA['lon']:.5f}",
-            f"{airportB['lat']:.5f}",
-            f"{airportB['lon']:.5f}",
-        )
-        if is_plausible:
-            break
-
-    print(f"==> {callsign} plausible: {is_plausible} {type(is_plausible)}")
-    route["plausible"] = is_plausible
-    await redisVRS.cache_route(callsign, is_plausible, route)
+    if route["airport_codes"] != "unknown":
+        route["plausible"] = await calc_plausible(route, lat, lng)
+        await redisVRS.cache_route(callsign, route["plausible"], route)
     return route
 
 
-@router.get(
-    "/0/route/{callsign}/{lat}/{lng}",
-    response_class=PrettyJSONResponse,
-    tags=["v0"],
-    summary="Route plus plausible flag for a specific callsign and position",
-    description="Data by https://github.com/vradarserver/standing-data/",
-    include_in_schema=False,
-)
-async def api_route3(
-    callsign: str,
-    lat: str = None,
-    lng: str = None,
-):
-    """
-    Return information about a route and plane position.
-    Return value includes a guess whether
-    this is a plausible route,given plane position.
-    """
-    route = await get_route_for_callsign_lat_lng(callsign, lat, lng)
-    return PrettyJSONResponse(content=route, headers=CORS_HEADERS)
+@router.get("/0/airport/{icao}", response_class=PrettyJSONResponse, tags=["v0"],
+            summary="Airports by ICAO", description="Data by https://github.com/vradarserver/standing-data/")
+async def api_airport(icao: str):
+    return await redisVRS.get_airport(icao)
 
 
-@router.get(
-    "/0/route/{callsign}",
-    response_class=PrettyJSONResponse,
-    tags=["v0"],
-    summary="Route for a specific callsign",
-    description="Data by https://github.com/vradarserver/standing-data/",
-    include_in_schema=False,
-)
-async def api_route(
-    callsign: str,
-):
-    """
-    Return information about a route.
-    """
-    new_url = f"https://vrs-standing-data.adsb.lol/routes/{callsign[0:2]}/{callsign}.json#this-API-has-been-deprecated-please-use-this-new-URL-directly"
+@router.get("/0/route/{callsign}/{lat}/{lng}", response_class=PrettyJSONResponse, tags=["v0"],
+            summary="Route plus plausible flag", description="Data by https://github.com/vradarserver/standing-data/",
+            include_in_schema=False)
+async def api_route3(callsign: str, lat: str, lng: str):
+    return PrettyJSONResponse(content=await get_route_cached_or_fetch(callsign, lat, lng), headers=CORS_HEADERS)
+
+
+@router.get("/0/route/{callsign}", response_class=PrettyJSONResponse, tags=["v0"],
+            summary="Route for callsign", description="Data by https://github.com/vradarserver/standing-data/",
+            include_in_schema=False)
+async def api_route(callsign: str):
     await asyncio.sleep(5)
-    return Response(status_code=302, headers={"Location": new_url})
+    return Response(status_code=302, headers={"Location": f"https://vrs-standing-data.adsb.lol/routes/{callsign[:2]}/{callsign}.json#deprecated"})
 
 
-@router.post(
-    "/0/routeset",
-    response_class=PrettyJSONResponse,
-    tags=["v0"],
-    summary="Routes for a list of aircraft callsigns",
-    description="""Look up routes for multiple planes at once.
-    Data by https://github.com/vradarserver/standing-data/""",
-)
+@router.post("/0/routeset", response_class=PrettyJSONResponse, tags=["v0"])
 async def api_routeset(planeList: PlaneList):
-    """
-    Return route information on a list of planes / positions
-    """
-    # print(planeList)
-    response = []
-    if len(planeList.planes) > 100:
+    if not planeList.planes or len(planeList.planes) > 100:
         return Response(status_code=400)
+
+    callsigns = [p.callsign for p in planeList.planes]
+    cached = await redisVRS.get_cached_routes_bulk(callsigns)
+    uncached = [cs for cs in callsigns if not cached.get(cs)]
+    fetched = await redisVRS.get_routes_bulk(uncached) if uncached else {}
+
+    # Merge routes, track uncached for parallel plausible
+    routes = {}
     tasks = []
-    for plane in planeList.planes:
-        tasks.append(
-            get_route_for_callsign_lat_lng(plane.callsign, plane.lat, plane.lng)
-        )
-    response = [x for x in await asyncio.gather(*tasks)]
-    return PrettyJSONResponse(content=response, headers=CORS_HEADERS)
+    for p in planeList.planes:
+        r = cached.get(p.callsign) or fetched.get(p.callsign)
+        if not r:
+            r = {"callsign": p.callsign, "airport_codes": "unknown", "_airports": []}
+        elif p.callsign in uncached and r["airport_codes"] != "unknown":
+            tasks.append((p.callsign, r, p.lat, p.lng))
+        routes[p.callsign] = r
+
+    # Parallel plausible + cache
+    if tasks:
+        for (cs, r, lat, lng), is_plausible in zip(tasks, await asyncio.gather(*(calc_plausible(r, lat, lng) for _, r, lat, lng in tasks))):
+            r["plausible"] = is_plausible
+        await asyncio.gather(*(redisVRS.cache_route(cs, routes[cs]["plausible"], routes[cs]) for cs, _, _, _ in tasks))
+
+    return PrettyJSONResponse(content=list(routes.values()), headers=CORS_HEADERS)
 
 
 @router.options("/0/routeset", include_in_schema=False)
