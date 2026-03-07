@@ -52,8 +52,9 @@ You can use the API for free.
 In the future, you will require an API key
 which you can get by feeding to adsb.lol.
 
-If you want to use the API for production purposes,
-please contact me so I do not break your application by accident.
+Rate limits are dynamic based on the environment load. 
+
+If you get 4xx errors, you are doing something wrong. 
 
 ## License
 
