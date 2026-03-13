@@ -15,7 +15,7 @@ import orjson
 import redis.asyncio as redis
 
 from adsb_api.utils.reapi import ReAPI
-from adsb_api.utils.settings import INGEST_DNS, INGEST_HTTP_PORT, MLAT_SERVERS, REAPI_ENDPOINT, SALT_MLAT, SALT_MY, STATS_URL
+from adsb_api.utils.settings import (INGEST_DNS, INGEST_HTTP_PORT, MLAT_SERVERS, REAPI_ENDPOINT, REDIS_KEY_BEAST_CLIENTS, REDIS_KEY_BEAST_RECEIVERS, REDIS_KEY_HUB_AIRCRAFT, REDIS_KEY_MLAT_CLIENTS, REDIS_KEY_MLAT_SYNC, REDIS_KEY_MLAT_TOTALCOUNT, SALT_MLAT, SALT_MY, STATS_URL)
 
 _HOSTNAME = gethostname()
 _UNKNOWN_ROUTE = {"callsign": "", "number": "unknown", "airline_code": "unknown", "airport_codes": "unknown", "_airport_codes_iata": "unknown", "_airports": []}
@@ -65,7 +65,8 @@ class BackgroundTaskMixin:
             attr = getattr(self, attr_name)
             if hasattr(attr, "_bg_task_config"):
                 config = attr._bg_task_config
-                if enabled_tasks is None or attr_name in enabled_tasks:
+                matched = enabled_tasks is None or attr_name in enabled_tasks or attr_name.lstrip("_") in enabled_tasks
+                if matched:
                     self._bg_task_handles.append(asyncio.create_task(self._run_bg_task(attr_name, attr, config)))
 
     async def stop_bg_tasks(self):
@@ -84,10 +85,14 @@ class BackgroundTaskMixin:
         success_interval = config.get("success_interval")
 
         while True:
-            async def _():
-                return await coro()
+            try:
+                async def _():
+                    return await coro()
 
-            result = await _locked(self.redis, lock, lock_expire, _)
+                result = await _locked(self.redis, lock, lock_expire, _)
+            except Exception as e:
+                print(f"[{self.__class__.__name__}] Task {name} error: {e}")
+                traceback.print_exc()
 
             # Determine sleep interval
             sleep_time = interval
@@ -98,8 +103,8 @@ class BackgroundTaskMixin:
 
 
 @lru_cache(1024)
-def _salty(uuid: str, salt: str) -> str:
-    return str(uuid.UUID(bytes=hashlib.sha3_256(f"{uuid}{salt}".encode()).digest()[:16]))
+def _salty(uuid_val: str, salt: str) -> str:
+    return str(uuid.UUID(bytes=hashlib.sha3_256(f"{uuid_val}{salt}".encode()).digest()[:16]))
 
 
 def _humanhash(uuid: str, salt: str) -> str:
@@ -107,12 +112,17 @@ def _humanhash(uuid: str, salt: str) -> str:
 
 
 class Provider(BackgroundTaskMixin, Base):
+    # Redis helpers for JSON data
+    async def _json_get(self, key: str):
+        data = await self.redis.get(key)
+        return orjson.loads(data) if data else None
+
+    async def _json_gets(self, keys: list[str]) -> dict:
+        """Get multiple JSON values in parallel."""
+        vals = await self.redis.mget(keys)
+        return {k: orjson.loads(v) for k, v in zip(keys, vals) if v}
     def __init__(self, enabled_bg_tasks):
         super().__init__()
-        self.beast_clients = self.beast_receivers = []
-        self.mlat_sync_json = self.mlat_clients = {}
-        self.mlat_totalcount_json = {}
-        self.aircraft_totalcount = 0
         self.ReAPI = ReAPI(REAPI_ENDPOINT)
         self.redis = self.resolver = None
         self.redis_connection_string = None
@@ -131,23 +141,43 @@ class Provider(BackgroundTaskMixin, Base):
 
     @_background_task(interval=10, lock="hub_stats", lock_expire=10)
     async def _fetch_hub_stats(self):
-        async with self._session.get(STATS_URL) as r:
-            if r.status == 200:
-                self.aircraft_totalcount = (await r.json())["aircraft_with_pos"]
+        print(f"[_fetch_hub_stats] Fetching from {STATS_URL}")
+        try:
+            async with self._session.get(STATS_URL) as r:
+                print(f"[_fetch_hub_stats] Status: {r.status}")
+                if r.status == 200:
+                    data = await r.json()
+                    aircraft_count = data.get("aircraft_with_pos")
+                    print(f"[_fetch_hub_stats] aircraft_with_pos: {aircraft_count}")
+                    await self.redis.set(REDIS_KEY_HUB_AIRCRAFT, aircraft_count, ex=15)
+                    print(f"[_fetch_hub_stats] Set Redis key {REDIS_KEY_HUB_AIRCRAFT}")
+        except Exception as e:
+            print(f"[_fetch_hub_stats] Error: {e}")
+            traceback.print_exc()
 
     @_background_task(interval=5, lock="ingest", lock_expire=8)
     async def _fetch_ingest(self):
-        ips = [x.host for x in await self.resolver.query(INGEST_DNS, "A")]
-        results = await asyncio.gather(*(self._fetch_one(ip) for ip in ips))
+        print(f"[_fetch_ingest] Resolving {INGEST_DNS}")
+        try:
+            print(f"[_fetch_ingest] resolver={self.resolver}, session={self._session}")
+            ips = [x.host for x in await self.resolver.query(INGEST_DNS, "A")]
+            print(f"[_fetch_ingest] Resolved IPs: {ips}, fetching from {len(ips)} servers")
+            results = await asyncio.gather(*(self._fetch_one(ip) for ip in ips))
+            print(f"[_fetch_ingest] Gather results: {results}")
 
-        clients, receivers = [], []
-        for r in results:
-            if r:
-                clients.extend(r.get("clients", []))
-                receivers.extend(r.get("receivers", []))
+            clients, receivers = [], []
+            for r in results:
+                if r:
+                    clients.extend(r.get("clients", []))
+                    receivers.extend(r.get("receivers", []))
 
-        self.beast_clients = self._dedupe(clients)
-        self.beast_receivers = receivers
+            print(f"[_fetch_ingest] Got {len(clients)} clients, {len(receivers)} receivers")
+            await self.redis.set(REDIS_KEY_BEAST_CLIENTS, orjson.dumps(self._dedupe(clients)), ex=15)
+            await self.redis.set(REDIS_KEY_BEAST_RECEIVERS, orjson.dumps(receivers), ex=15)
+            print(f"[_fetch_ingest] Set Redis keys")
+        except Exception as e:
+            print(f"[_fetch_ingest] Error: {e}")
+            traceback.print_exc()
 
     async def _fetch_one(self, ip: str) -> dict | None:
         try:
@@ -173,16 +203,19 @@ class Provider(BackgroundTaskMixin, Base):
             await asyncio.gather(get_clients(), get_receivers())
             for r in receivers or []:
                 r[8], r[9] = round(r[8], 1), round(r[9], 1)
+            print(f"[_fetch_one {ip}] Got {len(clients or [])} clients, {len(receivers or [])} receivers")
             return {"clients": clients, "receivers": receivers}
-        except Exception:
+        except Exception as e:
+            print(f"[_fetch_one {ip}] Error: {e}")
+            traceback.print_exc()
             return None
 
     def _dedupe(self, clients: list) -> list:
-        seen, uniq = {}, []
+        seen, uniq = set(), []
         for c in clients:
             key = (c[0], c[1].split()[1])
             if key not in seen:
-                seen[key] = 1
+                seen.add(key)
                 uniq.append({"uuid": c[0][:13] + "-...", "_uuid": c[0], "adsblol_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.my.adsb.lol",
                             "ip": c[1].split()[1], "kbps": c[2], "connected_seconds": c[3], "messages_per_second": c[4],
                             "positions_per_second": c[5], "positions": c[8], "ms": c[7]})
@@ -198,29 +231,41 @@ class Provider(BackgroundTaskMixin, Base):
                 async with self._session.get(f"http://{srv}:150/sync.json", timeout=aiohttp.ClientTimeout(total=10)) as r:
                     if r.status == 200:
                         data[sv] = {n: {"lat": v["lat"], "lon": v["lon"], "bad_syncs": v.get("bad_syncs", -1), "peers": {_salty(p, SALT_MLAT): pv for p, pv in v.get("peers", {}).items()}} for n, v in (await r.json()).items()}
+                        print(f"[_fetch_mlat] Fetched sync from {sv}: {len(data[sv])} entries")
                 async with self._session.get(f"http://{srv}:150/clients.json", timeout=aiohttp.ClientTimeout(total=10)) as r:
                     if r.status == 200:
                         clients[sv] = await r.json()
-            except Exception:
-                pass
+                        print(f"[_fetch_mlat] Fetched clients from {sv}")
+            except Exception as e:
+                print(f"[_fetch_mlat] Error fetching from {srv}: {e}")
 
+        print(f"[_fetch_mlat] Fetching from {MLAT_SERVERS}")
         await asyncio.gather(*(fetch(s) for s in MLAT_SERVERS))
-        self.mlat_sync_json = data
-        self.mlat_clients = clients
-        self.mlat_totalcount_json = {"UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"), **{sv: [len(d), 1337, 0] for sv, d in data.items()}}
+        print(f"[_fetch_mlat] Got data from {len(data)} servers, clients from {len(clients)} servers")
+        await self.redis.set(REDIS_KEY_MLAT_SYNC, orjson.dumps(data), ex=15)
+        await self.redis.set(REDIS_KEY_MLAT_CLIENTS, orjson.dumps(clients), ex=15)
+        await self.redis.set(REDIS_KEY_MLAT_TOTALCOUNT, orjson.dumps({"UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"), **{sv: [len(d), 1337, 0] for sv, d in data.items()}}), ex=15)
+        print(f"[_fetch_mlat] Set Redis keys")
 
-    def get_clients_per_client_ip(self, ip: str) -> list:
-        return [{k: v for k, v in c.items() if not k.startswith("_")} for c in self.beast_clients if c["ip"] == ip]
+    async def get_clients_per_client_ip(self, ip: str) -> list:
+        clients = await self._json_get(REDIS_KEY_BEAST_CLIENTS) or []
+        return [{k: v for k, v in c.items() if not k.startswith("_")} for c in clients if c["ip"] == ip]
 
-    def mlat_clients_to_list(self, ip: str) -> list:
+    async def mlat_clients_to_list(self, ip: str) -> list:
         keys = ("user", "privacy", "connection", "peer_count", "bad_sync_timeout", "outlier_percent")
+        mlat_clients = await self._json_get(REDIS_KEY_MLAT_CLIENTS) or {}
         r = []
-        for d in self.mlat_clients.values():
+        for d in mlat_clients.values():
             for c in d.values():
                 if c.get("source_ip") == ip:
                     o = {k: c[k] for k in keys if k in c}
                     u = c.get("uuid")
-                    o["uuid"] = (u[0][:13] + "-...") if isinstance(u, list) and u else (u[:13] + "-..." if isinstance(u, str) else None)
+                    if isinstance(u, list) and u:
+                        o["uuid"] = u[0][:13] + "-..."
+                    elif isinstance(u, str):
+                        o["uuid"] = u[:13] + "-..."
+                    else:
+                        o["uuid"] = None
                     r.append(o)
         return r
 
@@ -228,28 +273,40 @@ class Provider(BackgroundTaskMixin, Base):
 class RedisVRS(BackgroundTaskMixin, Base):
     def __init__(self):
         super().__init__()
-        self.redis = None
+        self.redis = self._session = None
         self.redis_connection_string = None
 
     async def connect(self):
         self.redis = await redis.from_url(self.redis_connection_string)
+        self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
 
     async def shutdown(self):
         await self.stop_bg_tasks()
+        if self._session:
+            await self._session.close()
 
     async def dispatch_background_task(self):
         await self.start_bg_tasks()
 
     @_background_task(interval=60, lock="vrs_csv", lock_expire=3600, success_interval=3600)
     async def _loop(self):
-        async with aiohttp.ClientSession() as sess:
-            for name, url in (("route", "https://vrs-standing-data.adsb.lol/routes.csv.gz"), ("airport", "https://vrs-standing-data.adsb.lol/airports.csv.gz")):
-                async with sess.get(url) as r:
+        print("[RedisVRS._loop] Starting CSV fetch")
+        for name, url in (("route", "https://vrs-standing-data.adsb.lol/routes.csv.gz"), ("airport", "https://vrs-standing-data.adsb.lol/airports.csv.gz")):
+            try:
+                async with self._session.get(url) as r:
                     if r.status == 200:
                         pipe = self.redis.pipeline()
+                        count = 0
                         for row in gzip.decompress(await r.read()).decode().splitlines():
                             pipe.set(f"vrs:{name}:{row.split(',')[0]}", row)
+                            count += 1
                         await pipe.execute()
+                        print(f"[RedisVRS._loop] Fetched {name}: {count} rows")
+                    else:
+                        print(f"[RedisVRS._loop] Failed to fetch {name}: status {r.status}")
+            except Exception as e:
+                print(f"[RedisVRS._loop] Error fetching {name}: {e}")
+                traceback.print_exc()
         return True
 
     async def mget(self, keys: list[str]) -> list:
@@ -262,7 +319,7 @@ class RedisVRS(BackgroundTaskMixin, Base):
         try:
             _, n, _, i, l, c, la, lo, a = list(csv.reader([d.decode()]))[0]
             return {"name": n, "icao": icao, "iata": i, "location": l, "countryiso2": c, "lat": float(la), "lon": float(lo), "alt_feet": float(a), "alt_meters": round(float(a) * 0.3048, 2)}
-        except:
+        except (ValueError, IndexError, csv.Error):
             return None
 
     async def _route(self, callsign: str, vrsroute: str) -> dict:
@@ -288,7 +345,10 @@ class RedisVRS(BackgroundTaskMixin, Base):
         if not callsigns:
             return {}
         vals = await self.mget([f"vrs:route:{cs}" for cs in callsigns])
-        return {cs: await self._route(cs, v) for cs, v in zip(callsigns, vals) if v}
+        # Parallel _route() calls instead of sequential
+        pairs = [(cs, v) for cs, v in zip(callsigns, vals) if v]
+        results = await asyncio.gather(*(self._route(cs, v) for cs, v in pairs))
+        return {cs: route for (cs, _), route in zip(pairs, results)}
 
     async def get_cached_route(self, callsign: str) -> dict | None:
         v = await self.redis.get(f"vrs:routecache:{callsign}")
@@ -298,7 +358,7 @@ class RedisVRS(BackgroundTaskMixin, Base):
         if not callsigns:
             return {}
         vals = await self.mget([f"vrs:routecache:{cs}" for cs in callsigns])
-        return {cs: orjson.loads(v) if v else None for cs, v in zip(callsigns, vals)}
+        return {cs: (orjson.loads(v) if v else None) for cs, v in zip(callsigns, vals)}
 
     async def cache_route(self, callsign: str, plausible: bool, route: dict):
         await self.redis.set(f"vrs:routecache:{callsign}", orjson.dumps(route), ex=1200 if plausible else 60)
@@ -309,7 +369,6 @@ class FeederData(BackgroundTaskMixin, Base):
         super().__init__()
         self.redis = self._session = self._resolver = None
         self.redis_connection_string = None
-        self.ingest_aircrafts = {}
 
     async def connect(self):
         self.redis = await redis.from_url(self.redis_connection_string)
@@ -325,36 +384,45 @@ class FeederData(BackgroundTaskMixin, Base):
 
     @_background_task(interval=5, lock="feeder_data", lock_expire=10)
     async def _loop(self):
-        async with asyncio.timeout(10):
-            ips = [x.host for x in await self._resolver.query(INGEST_DNS, "A")]
-            for ip in set(self.ingest_aircrafts) - set(ips):
-                del self.ingest_aircrafts[ip]
+        try:
+            async with asyncio.timeout(10):
+                print("[FeederData._loop] Resolving ingest DNS")
+                ips = [x.host for x in await self._resolver.query(INGEST_DNS, "A")]
+                print(f"[FeederData._loop] Resolved IPs: {ips}")
+                results = await asyncio.gather(*(self._fetch(ip) for ip in ips), return_exceptions=True)
+                pipe, recv_ingest = self.redis.pipeline(), {}
 
-            results = await asyncio.gather(*(self._fetch(ip) for ip in ips), return_exceptions=True)
-            pipe, recv_ingest = self.redis.pipeline(), {}
+                for ip, data in zip(ips, results):
+                    if isinstance(data, Exception):
+                        print(f"[FeederData._loop] Error from {ip}: {data}")
+                        continue
+                    if not data:
+                        continue
+                    aircraft_count = len(data.get("aircraft", []))
+                    print(f"[FeederData._loop] Got {aircraft_count} aircraft from {ip}")
+                    for ac in data.get("aircraft", []):
+                        for r in ac.get("recentReceiverIds", []):
+                            recv_ingest[r] = ip
+                            pipe.zadd(f"receiver_ac:{r}", {ac["hex"]: int(asyncio.get_event_loop().time())})
 
-            for ip, data in zip(ips, results):
-                if isinstance(data, Exception) or not data:
-                    continue
-                for ac in data.get("aircraft", []):
-                    for r in ac.get("recentReceiverIds", []):
-                        recv_ingest[r] = ip
-                        pipe.zadd(f"receiver_ac:{r}", {ac["hex"]: int(asyncio.get_event_loop().time())})
-
-            now = int(asyncio.get_event_loop().time())
-            for r, ip in recv_ingest.items():
-                pipe.zremrangebyscore(f"receiver_ac:{r}", "-1", now - 60).expire(f"receiver_ac:{r}", 30).set(f"receiver_ingest:{r}", ip, ex=30)
-            await pipe.execute()
+                now = int(asyncio.get_event_loop().time())
+                for r, ip in recv_ingest.items():
+                    pipe.zremrangebyscore(f"receiver_ac:{r}", "-1", now - 60)
+                    pipe.expire(f"receiver_ac:{r}", 30)
+                    pipe.set(f"receiver_ingest:{r}", ip, ex=30)
+                await pipe.execute()
+                print(f"[FeederData._loop] Updated {len(recv_ingest)} receivers")
+        except Exception as e:
+            print(f"[FeederData._loop] Error: {e}")
+            traceback.print_exc()
 
     async def _fetch(self, ip: str) -> dict | None:
         try:
             async with self._session.get(f"http://{ip}:{INGEST_HTTP_PORT}/aircraft.json") as r:
                 if r.status == 200:
-                    self.ingest_aircrafts[ip] = await r.json()
-                    return self.ingest_aircrafts[ip]
-        except Exception:
-            pass
-        self.ingest_aircrafts.setdefault(ip, {"aircraft": []})
+                    return await r.json()
+        except Exception as e:
+            print(f"[_fetch] Error fetching from {ip}: {e}")
         return None
 
     async def get_aircraft(self, receiver: str) -> list | None:

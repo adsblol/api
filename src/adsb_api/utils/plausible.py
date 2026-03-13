@@ -1,4 +1,3 @@
-from asyncio import to_thread
 from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
 
@@ -18,7 +17,7 @@ def _distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return EARTH_RADIUS * 2 * asin(sqrt(_hav_distance(lat1, lng1, lat2, lng2)))
 
 
-@lru_cache(maxsize=4096)
+@lru_cache(maxsize=512)
 def _plausible_sync(pos_lat: float, pos_lng: float,
                    a_lat: float, a_lng: float,
                    b_lat: float, b_lng: float) -> tuple[bool, float]:
@@ -46,12 +45,15 @@ def _plausible_sync(pos_lat: float, pos_lng: float,
 
 
 async def plausible(pos_lat: float, pos_lng: float,
-                   airport_a_lat: str, airport_a_lon: str,
-                   airport_b_lat: str, airport_b_lon: str) -> tuple[bool, float]:
-    """Non-blocking - runs in thread pool to avoid blocking event loop."""
-    return await to_thread(
-        _plausible_sync,
+                   airport_a_lat: float, airport_a_lon: float,
+                   airport_b_lat: float, airport_b_lon: float) -> tuple[bool, float]:
+    """Check if position is within threshold of great circle route A-B.
+
+    Pure Python math - fast enough to run directly without thread pool.
+    Uses lru_cache so repeated route segments are memoized.
+    """
+    return _plausible_sync(
         pos_lat, pos_lng,
-        float(airport_a_lat), float(airport_a_lon),
-        float(airport_b_lat), float(airport_b_lon)
+        airport_a_lat, airport_a_lon,
+        airport_b_lat, airport_b_lon
     )

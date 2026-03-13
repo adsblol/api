@@ -21,14 +21,24 @@ from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
 from adsb_api.utils.api_routes import router as routes_router
+from adsb_api.utils.api_tar import close_http_session as close_tar_http_session
 from adsb_api.utils.api_tar import router as tar_router
 from adsb_api.utils.api_v2 import router as v2_router
 from adsb_api.utils.dependencies import browser, feederData, provider, redisVRS
 from adsb_api.utils.models import ApiUuidRequest, PrettyJSONResponse
-from adsb_api.utils.settings import (INSECURE, REDIS_HOST, SALT_BEAST,
+from adsb_api.utils.settings import (INSECURE, REDIS_KEY_BEAST_CLIENTS, REDIS_KEY_BEAST_RECEIVERS, REDIS_KEY_HUB_AIRCRAFT, REDIS_KEY_MLAT_CLIENTS, REDIS_KEY_MLAT_SYNC, REDIS_KEY_MLAT_TOTALCOUNT, REDIS_HOST, SALT_BEAST,
                                      SALT_MLAT, SALT_MY)
 
 PROJECT_PATH = pathlib.Path(__file__).parent.parent.parent
+
+# Shared aiohttp session for external HTTP requests
+_http_session: aiohttp.ClientSession | None = None
+
+async def get_http_session() -> aiohttp.ClientSession:
+    global _http_session
+    if _http_session is None:
+        _http_session = aiohttp.ClientSession()
+    return _http_session
 
 description = """
 The adsb.lol API is a free and open source
@@ -132,8 +142,11 @@ async def startup_event():
     await redisVRS.dispatch_background_task()
     await feederData.dispatch_background_task()
     try:
-        await browser.start()
-    except:
+        # Add timeout to prevent hanging if CDP browser is unavailable
+        await asyncio.wait_for(browser.start(), timeout=5.0)
+    except asyncio.TimeoutError:
+        print("browser.start() timed out after 5s - CDP browser may be unavailable")
+    except Exception:
         traceback.print_exc()
 
     ensure_uuid_security()
@@ -141,9 +154,14 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    global _http_session
     await provider.shutdown()
     await redisVRS.shutdown()
     await browser.shutdown()
+    await close_tar_http_session()
+    if _http_session:
+        await _http_session.close()
+        _http_session = None
 
 
 @app.get(
@@ -155,17 +173,18 @@ async def mlat_receivers(
     server: str,
     host: str | None = Header(default=None, include_in_schema=False),
 ):
-    # if the host is not mlat.adsb.lol,
-    # return a 404
     if host != "mlat.adsb.lol":
         print(f"failed mlat_sync host={host}, server={server} (not mlat.adsb.lol)")
         return {"error": "not found"}
 
-    if server not in provider.mlat_sync_json.keys():
-        print(f"failed mlat_sync host={host}, server={server} (not in {provider.mlat_sync_json.keys()})")
+    mlat_sync = await provider._json_get(REDIS_KEY_MLAT_SYNC)
+    if not mlat_sync:
+        return {"error": "not found"}
+    if server not in mlat_sync:
+        print(f"failed mlat_sync host={host}, server={server} (not in {mlat_sync.keys()})")
         return {"error": "not found"}
 
-    return provider.mlat_sync_json[server]
+    return mlat_sync[server]
 
 
 @app.get(
@@ -174,25 +193,23 @@ async def mlat_receivers(
     include_in_schema=False,
 )
 async def mlat_totalcount_json():
-    return provider.mlat_totalcount_json
+    return await provider._json_get(REDIS_KEY_MLAT_TOTALCOUNT) or {}
 
 
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
-    """
-    Return metrics for Prometheus
-    """
+    # Parallel JSON gets with parsing
+    data = await provider._json_gets([REDIS_KEY_BEAST_CLIENTS, REDIS_KEY_BEAST_RECEIVERS, REDIS_KEY_MLAT_CLIENTS, REDIS_KEY_HUB_AIRCRAFT])
+    aircraft_count = data.get(REDIS_KEY_HUB_AIRCRAFT)
+
     metrics = [
-        "adsb_api_beast_total_receivers {}".format(len(provider.beast_receivers)),
-        "adsb_api_beast_total_clients {}".format(len(provider.beast_clients)),
-        # "adsb_api_mlat_total {}".format(len(provider.mlat_sync_json)),
-        # new format is {'0a': {clients}, '0b': {clients}}
-        # so let's make tag for each server
+        "adsb_api_beast_total_receivers {}".format(len(data.get(REDIS_KEY_BEAST_RECEIVERS) or [])),
+        "adsb_api_beast_total_clients {}".format(len(data.get(REDIS_KEY_BEAST_CLIENTS) or [])),
         *[
             'adsb_api_mlat_total{{server="{0}"}} {1}'.format(server, len(clients))
-            for server, clients in provider.mlat_clients.items()
+            for server, clients in (data.get(REDIS_KEY_MLAT_CLIENTS) or {}).items()
         ],
-        "adsb_api_aircraft_total {}".format(provider.aircraft_totalcount),
+        f"adsb_api_aircraft_total {int(aircraft_count) if aircraft_count else 0}",
     ]
     return Response(content="\n".join(metrics), media_type="text/plain")
 
@@ -205,11 +222,14 @@ async def metrics():
 )
 async def api_me(request: Request):
     client_ip = request.client.host
-    my_beast_clients = provider.get_clients_per_client_ip(client_ip)
-    mlat_clients = provider.mlat_clients_to_list(client_ip)
+    my_beast_clients, mlat_clients = await asyncio.gather(
+        provider.get_clients_per_client_ip(client_ip),
+        provider.mlat_clients_to_list(client_ip),
+    )
 
-    # count all items as mlat_clients format is {'0a': {clients}, '0b': {clients}}
-    all_mlat_clients = sum([len(i) for i in provider.mlat_clients.values()])
+    data = await provider._json_gets([REDIS_KEY_MLAT_CLIENTS, REDIS_KEY_BEAST_CLIENTS, REDIS_KEY_HUB_AIRCRAFT])
+    mlat_data, beast_data, aircraft_count = data.get(REDIS_KEY_MLAT_CLIENTS) or {}, data.get(REDIS_KEY_BEAST_CLIENTS) or {}, data.get(REDIS_KEY_HUB_AIRCRAFT)
+
     response = {
         "_motd": [],
         "clients": {
@@ -217,9 +237,9 @@ async def api_me(request: Request):
             "mlat": mlat_clients,
         },
         "global": {
-            "beast": len(provider.beast_clients),
-            "mlat": all_mlat_clients,
-            "aircraft": provider.aircraft_totalcount,
+            "beast": len(beast_data),
+            "mlat": sum([len(i) for i in mlat_data.values()]),
+            "aircraft": int(aircraft_count) if aircraft_count else 0,
         },
     }
 
@@ -241,7 +261,7 @@ async def api_me(request: Request):
 @app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP", include_in_schema=False)
 async def api_my(request: Request):
     client_ip = request.client.host
-    my_beast_clients = provider.get_clients_per_client_ip(client_ip)
+    my_beast_clients = await provider.get_clients_per_client_ip(client_ip)
     uids = []
     if len(my_beast_clients) == 0:
         return RedirectResponse(
@@ -343,27 +363,17 @@ async def planespotters_net_hex(
     # check if we have a cached response
 
     if cache := await redisVRS.redis.get(redis_key):
-        # return the cached response
         return orjson.loads(cache)
-    # if not, query the API
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            f"https://api.planespotters.net/pub/photos/hex/{hex}",
-            params=params,
-        ) as response:
-            if response.status == 200:
-                # cache the response for 1h
-                data = await response.json()
-                await redisVRS.redis.setex(redis_key, 3600, orjson.dumps(data))
-                res = data
-            else:
-                res = {"error": "not found"}
-    return PrettyJSONResponse(
-        content=res,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-        },
-    )
+    # if not, query the API (using shared session)
+    session = await get_http_session()
+    async with session.get(
+        f"https://api.planespotters.net/pub/photos/hex/{hex}",
+        params=params,
+    ) as response:
+        if response.status == 200:
+            await redisVRS.redis.setex(redis_key, 3600, orjson.dumps(await response.json()))
+            return await response.json()
+        return {"error": "not found"}
 
 
 @app.options("/0/planespotters_net/hex/{hex}", include_in_schema=False)
@@ -383,9 +393,13 @@ async def planespotters_net_hex_options():
     tags=["v0"],
 )
 async def h3_latency():
+    data = await provider._json_gets([REDIS_KEY_BEAST_RECEIVERS, REDIS_KEY_BEAST_CLIENTS])
+    beast_receivers = data.get(REDIS_KEY_BEAST_RECEIVERS) or []
+    beast_clients = data.get(REDIS_KEY_BEAST_CLIENTS) or []
+
     _h3 = defaultdict(list)
-    for receiverId, lat, lon in provider.beast_receivers:
-        for client in provider.beast_clients:
+    for receiverId, lat, lon in beast_receivers:
+        for client in beast_clients:
             if not client["_uuid"].startswith(receiverId) or client.get("ms", -1) < 0:
                 continue
             _h3[h3.latlng_to_cell(lat, lon, 1)].append(client["ms"])

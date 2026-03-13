@@ -16,10 +16,18 @@ INGEST_DNS = os.getenv(
 INGEST_HTTP_PORT = os.getenv("ADSBLOL_INGEST_HTTP_PORT", "150")
 STATS_URL = os.getenv("ADSBLOL_STATS_URL", "http://hub-readsb-green:150/stats.json")
 ENABLED_BG_TASKS = os.getenv(
-    "ADSBLOL_ENABLED_BG_TASKS", "fetch_hub_stats,fetch_ingest,fetch_mlat"
+    "ADSBLOL_ENABLED_BG_TASKS", "_fetch_hub_stats,_fetch_ingest,_fetch_mlat"
 ).split(",")
 
 MLAT_SERVERS = os.getenv(
     "ADSBLOL_MLAT_SERVERS",
     "mlat-mlat-server-0a,mlat-mlat-server-0b,mlat-mlat-server-0c",
 ).split(",")
+
+# Redis key constants (single source of truth)
+REDIS_KEY_BEAST_CLIENTS = "beast:clients"
+REDIS_KEY_BEAST_RECEIVERS = "beast:receivers"
+REDIS_KEY_MLAT_SYNC = "mlat:sync_json"
+REDIS_KEY_MLAT_CLIENTS = "mlat:clients"
+REDIS_KEY_MLAT_TOTALCOUNT = "mlat:totalcount"
+REDIS_KEY_HUB_AIRCRAFT = "hub:aircraft_totalcount"

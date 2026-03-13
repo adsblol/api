@@ -14,17 +14,15 @@ CORS_HEADERS = {
 router = APIRouter(prefix="/api", tags=["v0"])
 
 
-async def calc_plausible(route, lat: str, lng: str) -> bool:
-    """Calculate if route is plausible for given position (non-blocking)."""
+async def calc_plausible(route, lat: float, lng: float) -> bool:
     for i in range(len(route.get("_airports", [])) - 1):
         a, b = route["_airports"][i], route["_airports"][i + 1]
-        is_plausible, _ = await plausible(lat, lng, f"{a['lat']:.5f}", f"{a['lon']:.5f}", f"{b['lat']:.5f}", f"{b['lon']:.5f}")
-        if is_plausible:
+        if await plausible(round(lat, 3), round(lng, 3), round(a["lat"], 3), round(a["lon"], 3), round(b["lat"], 3), round(b["lon"], 3)):
             return True
     return False
 
 
-async def get_route_cached_or_fetch(callsign: str, lat: str, lng: str) -> dict:
+async def get_route_cached_or_fetch(callsign: str, lat: float, lng: float) -> dict:
     """Get route from cache or fetch, with plausible calculation."""
     if cached := await redisVRS.get_cached_route(callsign):
         return cached
@@ -46,7 +44,7 @@ async def api_airport(icao: str):
             summary="Route plus plausible flag", description="Data by https://github.com/vradarserver/standing-data/",
             include_in_schema=False)
 async def api_route3(callsign: str, lat: str, lng: str):
-    return PrettyJSONResponse(content=await get_route_cached_or_fetch(callsign, lat, lng), headers=CORS_HEADERS)
+    return PrettyJSONResponse(content=await get_route_cached_or_fetch(callsign, float(lat), float(lng)), headers=CORS_HEADERS)
 
 
 @router.get("/0/route/{callsign}", response_class=PrettyJSONResponse, tags=["v0"],
@@ -68,15 +66,12 @@ async def api_routeset(planeList: PlaneList):
     fetched = await redisVRS.get_routes_bulk(uncached) if uncached else {}
 
     # Merge routes, track uncached for parallel plausible
-    routes = {}
-    tasks = []
+    routes, tasks = {}, []
     for p in planeList.planes:
-        r = cached.get(p.callsign) or fetched.get(p.callsign)
-        if not r:
-            r = {"callsign": p.callsign, "airport_codes": "unknown", "_airports": []}
-        elif p.callsign in uncached and r["airport_codes"] != "unknown":
-            tasks.append((p.callsign, r, p.lat, p.lng))
+        r = cached.get(p.callsign) or fetched.get(p.callsign) or {"callsign": p.callsign, "airport_codes": "unknown", "_airports": []}
         routes[p.callsign] = r
+        if p.callsign in uncached and r["airport_codes"] != "unknown":
+            tasks.append((p.callsign, r, p.lat, p.lng))
 
     # Parallel plausible + cache
     if tasks:

@@ -9,6 +9,54 @@ import backoff
 from async_timeout import timeout
 from playwright.async_api import Page, async_playwright
 
+
+class _SimpleBackgroundTaskMixin:
+    """Mixin for classes that run background tasks without Redis locking."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._bg_task_handles = []
+
+    async def start_bg_tasks(self):
+        """Start all @background_task decorated methods."""
+        for attr_name in dir(self):
+            attr = getattr(self, attr_name)
+            if hasattr(attr, "_bg_task_interval"):
+                self._bg_task_handles.append(asyncio.create_task(self._run_bg_task(attr)))
+
+    async def stop_bg_tasks(self):
+        """Cancel all background tasks."""
+        for handle in self._bg_task_handles:
+            handle.cancel()
+        if self._bg_task_handles:
+            await asyncio.gather(*self._bg_task_handles, return_exceptions=True)
+        self._bg_task_handles.clear()
+
+    async def _run_bg_task(self, coro):
+        """Run a background task with sleep interval and error handling."""
+        while True:
+            try:
+                await coro()
+            except asyncio.CancelledError:
+                self.logger.info("Background task cancelled...")
+                raise
+            except Exception as e:
+                traceback.print_exc()
+                self.logger.error("Error during background task. Reason: %s", e)
+            await asyncio.sleep(coro._bg_task_interval)
+
+
+def background_task(interval: int):
+    """Decorator to mark a method as a background task.
+
+    Args:
+        interval: Sleep interval between runs (seconds)
+    """
+    def decorator(func):
+        func._bg_task_interval = interval
+        return func
+    return decorator
+
 SCREEN_SIZE = {"width": 256, "height": 256}
 
 # SCREEN_SIZE override from env var
@@ -17,7 +65,7 @@ SCREEN_SIZE = {
     "height": int(getenv("BROWSER2_SCREEN_HEIGHT", SCREEN_SIZE["height"])),
 }
 
-class BrowserTabPool:
+class BrowserTabPool(_SimpleBackgroundTaskMixin):
     def __init__(
         self,
         url: str,
@@ -28,6 +76,7 @@ class BrowserTabPool:
         before_add_to_pool_cb=None,
         before_return_to_pool_cb=None,
     ):
+        super().__init__()
         self.p = None
         self.browser = None
         self.url = url
@@ -39,7 +88,6 @@ class BrowserTabPool:
         self._active_tabs = set()
         self.before_add_to_pool_cb = before_add_to_pool_cb
         self.before_return_to_pool_cb = before_return_to_pool_cb
-        self._background_task = None
         self._total_tabs = (
             0  # Tracks the total number of tabs being created, in the pool, and active
         )
@@ -195,43 +243,29 @@ class BrowserTabPool:
                 self.p = None
                 await self.initialize()
 
-    async def _background_task_fn(self):
-        try:
-            while True:
-                self.logger.info("Running background task...")
-                try:
-                    await asyncio.gather(
-                        self.reconcile_pool(),
-                        self.enforce_tab_limits(),
-                        self.reconcile_browser(),
-                    )
-                except Exception as e:
-                    traceback.print_exc()
-                    self.logger.error("Error during background task. Reason: %s", e)
-                await asyncio.sleep(2)
-        except asyncio.CancelledError:
-            self.logger.info("Background task cancelled...")
+    @background_task(interval=2)
+    async def _reconcile(self):
+        self.logger.info("Running background task...")
+        await asyncio.gather(
+            self.reconcile_pool(),
+            self.enforce_tab_limits(),
+            self.reconcile_browser(),
+        )
 
     async def start(self):
         # Edge Case: Avoids multiple background tasks
         self.logger.info("Running background task...")
-        if self._background_task:
-            return
-        self._background_task = asyncio.create_task(self._background_task_fn())
+        if not self._bg_task_handles:
+            await self.start_bg_tasks()
 
     async def stop(self):
         self.logger.info("Stopping background task...")
-
-        # Edge Case: Gracefully handles stopping of the background task
-        if self._background_task:
-            self._background_task.cancel()
-            self._background_task = None
+        await self.stop_bg_tasks()
 
     # Graceful shutdown
     async def shutdown(self):
         self.logger.info("Shutting down...")
-        if self._background_task:
-            self._background_task.cancel()
+        await self.stop_bg_tasks()
         for tab in self._active_tabs:
             await self._remove_tab(tab)
         await self.browser.close()
