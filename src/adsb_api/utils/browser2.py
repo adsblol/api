@@ -246,7 +246,7 @@ async def before_add_to_pool_cb(page):
         page.goto("?screenshot&zoom=6&hideButtons&hideSidebar&lat=82&lon=-5&nowebGL"),
     ]
     try:
-        with timeout(5):
+        async with timeout(5):
             await asyncio.gather(*tasks)
     except asyncio.TimeoutError:
         traceback.print_exc()
@@ -260,7 +260,7 @@ async def before_add_to_pool_cb(page):
         page.wait_for_function("typeof OLMap === 'object'", timeout=5000),
     ]
     try:
-        with timeout(10):
+        async with timeout(10):
             await asyncio.gather(*tasks)
     except asyncio.TimeoutError:
         traceback.print_exc()
@@ -381,7 +381,7 @@ async def before_add_to_pool_cb(page):
         page.evaluate(js_magic),
     ]
     try:
-        with timeout(10):
+        async with timeout(10):
             await asyncio.gather(*tasks)
     except asyncio.TimeoutError:
         traceback.print_exc()

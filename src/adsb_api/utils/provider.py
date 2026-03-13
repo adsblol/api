@@ -32,6 +32,70 @@ async def _locked(r: redis.Redis, name: str, ttl: int, coro):
 
 class Base: ...
 
+def _background_task(interval: int, lock: str, lock_expire: int, success_interval: int | None = None):
+    """Decorator to mark a method as a background task.
+
+    Args:
+        interval: Default sleep interval between runs (seconds)
+        lock: Redis lock name prefix
+        lock_expire: Lock TTL (seconds)
+        success_interval: Optional sleep interval when task returns True
+    """
+    def decorator(func):
+        func._bg_task_config = {
+            "interval": interval,
+            "lock": lock,
+            "lock_expire": lock_expire,
+            "success_interval": success_interval,
+        }
+        return func
+    return decorator
+
+
+class BackgroundTaskMixin:
+    """Mixin for classes that run background tasks with Redis locking."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._bg_task_handles = []
+
+    async def start_bg_tasks(self, enabled_tasks: set[str] | None = None):
+        """Start all @background_task decorated methods."""
+        for attr_name in dir(self):
+            attr = getattr(self, attr_name)
+            if hasattr(attr, "_bg_task_config"):
+                config = attr._bg_task_config
+                if enabled_tasks is None or attr_name in enabled_tasks:
+                    self._bg_task_handles.append(asyncio.create_task(self._run_bg_task(attr_name, attr, config)))
+
+    async def stop_bg_tasks(self):
+        """Cancel all background tasks."""
+        for handle in self._bg_task_handles:
+            handle.cancel()
+        if self._bg_task_handles:
+            await asyncio.gather(*self._bg_task_handles, return_exceptions=True)
+        self._bg_task_handles.clear()
+
+    async def _run_bg_task(self, name: str, coro, config: dict):
+        """Run a background task with Redis locking and sleep interval."""
+        interval = config["interval"]
+        lock = config["lock"]
+        lock_expire = config["lock_expire"]
+        success_interval = config.get("success_interval")
+
+        while True:
+            async def _():
+                return await coro()
+
+            result = await _locked(self.redis, lock, lock_expire, _)
+
+            # Determine sleep interval
+            sleep_time = interval
+            if success_interval is not None and result is True:
+                sleep_time = success_interval
+
+            await asyncio.sleep(sleep_time)
+
 
 @lru_cache(1024)
 def _salty(uuid: str, salt: str) -> str:
@@ -42,8 +106,9 @@ def _humanhash(uuid: str, salt: str) -> str:
     return humanhash.humanize(_salty(uuid, salt).replace("-", ""), words=4)
 
 
-class Provider(Base):
+class Provider(BackgroundTaskMixin, Base):
     def __init__(self, enabled_bg_tasks):
+        super().__init__()
         self.beast_clients = self.beast_receivers = []
         self.mlat_sync_json = self.mlat_clients = {}
         self.mlat_totalcount_json = {}
@@ -52,48 +117,37 @@ class Provider(Base):
         self.redis = self.resolver = None
         self.redis_connection_string = None
         self.enabled_bg_tasks = enabled_bg_tasks
-        self._tasks = []
         self._session = None
 
     async def startup(self):
         self.redis = await redis.from_url(self.redis_connection_string)
         self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5, connect=1))
         self.resolver = aiodns.DNSResolver()
-        for name, fn in ("fetch_hub_stats", self._fetch_hub_stats), ("fetch_ingest", self._fetch_ingest), ("fetch_mlat", self._fetch_mlat):
-            if name in self.enabled_bg_tasks:
-                self._tasks.append(asyncio.create_task(fn()))
+        await self.start_bg_tasks(self.enabled_bg_tasks)
 
     async def shutdown(self):
-        for t in self._tasks:
-            t.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
+        await self.stop_bg_tasks()
         await self._session.close()
 
+    @_background_task(interval=10, lock="hub_stats", lock_expire=10)
     async def _fetch_hub_stats(self):
-        while True:
-            async def _():
-                async with self._session.get(STATS_URL) as r:
-                    if r.status == 200:
-                        self.aircraft_totalcount = (await r.json())["aircraft_with_pos"]
-            await _locked(self.redis, "hub_stats", 10, _)
-            await asyncio.sleep(10)
+        async with self._session.get(STATS_URL) as r:
+            if r.status == 200:
+                self.aircraft_totalcount = (await r.json())["aircraft_with_pos"]
 
+    @_background_task(interval=5, lock="ingest", lock_expire=8)
     async def _fetch_ingest(self):
-        while True:
-            async def _():
-                ips = [x.host for x in await self.resolver.query(INGEST_DNS, "A")]
-                results = await asyncio.gather(*(self._fetch_one(ip) for ip in ips))
+        ips = [x.host for x in await self.resolver.query(INGEST_DNS, "A")]
+        results = await asyncio.gather(*(self._fetch_one(ip) for ip in ips))
 
-                clients, receivers = [], []
-                for r in results:
-                    if r:
-                        clients.extend(r.get("clients", []))
-                        receivers.extend(r.get("receivers", []))
+        clients, receivers = [], []
+        for r in results:
+            if r:
+                clients.extend(r.get("clients", []))
+                receivers.extend(r.get("receivers", []))
 
-                self.beast_clients = self._dedupe(clients)
-                self.beast_receivers = receivers
-            await _locked(self.redis, "ingest", 8, _)
-            await asyncio.sleep(5)
+        self.beast_clients = self._dedupe(clients)
+        self.beast_receivers = receivers
 
     async def _fetch_one(self, ip: str) -> dict | None:
         try:
@@ -134,65 +188,69 @@ class Provider(Base):
                             "positions_per_second": c[5], "positions": c[8], "ms": c[7]})
         return uniq
 
+    @_background_task(interval=5, lock="mlat", lock_expire=8)
     async def _fetch_mlat(self):
-        while True:
-            async def _():
-                data, clients = {}, {}
+        data, clients = {}, {}
 
-                async def fetch(srv):
-                    sv = srv.split("-")[-1].upper()
-                    try:
-                        async with self._session.get(f"http://{srv}:150/sync.json", timeout=aiohttp.ClientTimeout(total=10)) as r:
-                            if r.status == 200:
-                                data[sv] = {n: {"lat": v["lat"], "lon": v["lon"], "bad_syncs": v.get("bad_syncs", -1), "peers": {_salty(p, SALT_MLAT): pv for p, pv in v.get("peers", {}).items()}} for n, v in (await r.json()).items()}
-                        async with self._session.get(f"http://{srv}:150/clients.json", timeout=aiohttp.ClientTimeout(total=10)) as r:
-                            if r.status == 200:
-                                clients[sv] = await r.json()
-                    except Exception:
-                        pass
+        async def fetch(srv):
+            sv = srv.split("-")[-1].upper()
+            try:
+                async with self._session.get(f"http://{srv}:150/sync.json", timeout=aiohttp.ClientTimeout(total=10)) as r:
+                    if r.status == 200:
+                        data[sv] = {n: {"lat": v["lat"], "lon": v["lon"], "bad_syncs": v.get("bad_syncs", -1), "peers": {_salty(p, SALT_MLAT): pv for p, pv in v.get("peers", {}).items()}} for n, v in (await r.json()).items()}
+                async with self._session.get(f"http://{srv}:150/clients.json", timeout=aiohttp.ClientTimeout(total=10)) as r:
+                    if r.status == 200:
+                        clients[sv] = await r.json()
+            except Exception:
+                pass
 
-                await asyncio.gather(*(fetch(s) for s in MLAT_SERVERS))
-                self.mlat_sync_json = data
-                self.mlat_clients = clients
-                self.mlat_totalcount_json = {"UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"), **{sv: [len(d), 1337, 0] for sv, d in data.items()}}
-            await _locked(self.redis, "mlat", 8, _)
-            await asyncio.sleep(5)
+        await asyncio.gather(*(fetch(s) for s in MLAT_SERVERS))
+        self.mlat_sync_json = data
+        self.mlat_clients = clients
+        self.mlat_totalcount_json = {"UPDATED": datetime.now().strftime("%a %b %d %H:%M:%S UTC %Y"), **{sv: [len(d), 1337, 0] for sv, d in data.items()}}
 
     def get_clients_per_client_ip(self, ip: str) -> list:
         return [{k: v for k, v in c.items() if not k.startswith("_")} for c in self.beast_clients if c["ip"] == ip]
 
+    def mlat_clients_to_list(self, ip: str) -> list:
+        keys = ("user", "privacy", "connection", "peer_count", "bad_sync_timeout", "outlier_percent")
+        r = []
+        for d in self.mlat_clients.values():
+            for c in d.values():
+                if c.get("source_ip") == ip:
+                    o = {k: c[k] for k in keys if k in c}
+                    u = c.get("uuid")
+                    o["uuid"] = (u[0][:13] + "-...") if isinstance(u, list) and u else (u[:13] + "-..." if isinstance(u, str) else None)
+                    r.append(o)
+        return r
 
-class RedisVRS(Base):
+
+class RedisVRS(BackgroundTaskMixin, Base):
     def __init__(self):
-        self.redis = self._task = None
+        super().__init__()
+        self.redis = None
         self.redis_connection_string = None
 
     async def connect(self):
         self.redis = await redis.from_url(self.redis_connection_string)
 
     async def shutdown(self):
-        if self._task:
-            self._task.cancel()
-            await self._task
-
-    async def _loop(self):
-        while True:
-            async def _():
-                async with aiohttp.ClientSession() as sess:
-                    for name, url in (("route", "https://vrs-standing-data.adsb.lol/routes.csv.gz"), ("airport", "https://vrs-standing-data.adsb.lol/airports.csv.gz")):
-                        async with sess.get(url) as r:
-                            if r.status == 200:
-                                pipe = self.redis.pipeline()
-                                for row in gzip.decompress(await r.read()).decode().splitlines():
-                                    pipe.set(f"vrs:{name}:{row.split(',')[0]}", row)
-                                await pipe.execute()
-            if await _locked(self.redis, "vrs_csv", 3600, _):
-                await asyncio.sleep(3600)
-            else:
-                await asyncio.sleep(60)
+        await self.stop_bg_tasks()
 
     async def dispatch_background_task(self):
-        self._task = asyncio.create_task(self._loop())
+        await self.start_bg_tasks()
+
+    @_background_task(interval=60, lock="vrs_csv", lock_expire=3600, success_interval=3600)
+    async def _loop(self):
+        async with aiohttp.ClientSession() as sess:
+            for name, url in (("route", "https://vrs-standing-data.adsb.lol/routes.csv.gz"), ("airport", "https://vrs-standing-data.adsb.lol/airports.csv.gz")):
+                async with sess.get(url) as r:
+                    if r.status == 200:
+                        pipe = self.redis.pipeline()
+                        for row in gzip.decompress(await r.read()).decode().splitlines():
+                            pipe.set(f"vrs:{name}:{row.split(',')[0]}", row)
+                        await pipe.execute()
+        return True
 
     async def mget(self, keys: list[str]) -> list:
         return [v.decode() if v else None for v in await self.redis.mget(keys)] if keys else []
@@ -246,9 +304,10 @@ class RedisVRS(Base):
         await self.redis.set(f"vrs:routecache:{callsign}", orjson.dumps(route), ex=1200 if plausible else 60)
 
 
-class FeederData(Base):
+class FeederData(BackgroundTaskMixin, Base):
     def __init__(self):
-        self.redis = self._task = self._session = self._resolver = None
+        super().__init__()
+        self.redis = self._session = self._resolver = None
         self.redis_connection_string = None
         self.ingest_aircrafts = {}
 
@@ -258,39 +317,34 @@ class FeederData(Base):
         self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5, connect=1))
 
     async def shutdown(self):
-        if self._task:
-            self._task.cancel()
-            await self._task
+        await self.stop_bg_tasks()
         await self._session.close()
 
     async def dispatch_background_task(self):
-        self._task = asyncio.create_task(self._loop())
+        await self.start_bg_tasks()
 
+    @_background_task(interval=5, lock="feeder_data", lock_expire=10)
     async def _loop(self):
-        while True:
-            async def _():
-                async with asyncio.timeout(10):
-                    ips = [x.host for x in await self._resolver.query(INGEST_DNS, "A")]
-                    for ip in set(self.ingest_aircrafts) - set(ips):
-                        del self.ingest_aircrafts[ip]
+        async with asyncio.timeout(10):
+            ips = [x.host for x in await self._resolver.query(INGEST_DNS, "A")]
+            for ip in set(self.ingest_aircrafts) - set(ips):
+                del self.ingest_aircrafts[ip]
 
-                    results = await asyncio.gather(*(self._fetch(ip) for ip in ips), return_exceptions=True)
-                    pipe, recv_ingest = self.redis.pipeline(), {}
+            results = await asyncio.gather(*(self._fetch(ip) for ip in ips), return_exceptions=True)
+            pipe, recv_ingest = self.redis.pipeline(), {}
 
-                    for ip, data in zip(ips, results):
-                        if isinstance(data, Exception) or not data:
-                            continue
-                        for ac in data.get("aircraft", []):
-                            for r in ac.get("recentReceiverIds", []):
-                                recv_ingest[r] = ip
-                                pipe.zadd(f"receiver_ac:{r}", {ac["hex"]: int(asyncio.get_event_loop().time())})
+            for ip, data in zip(ips, results):
+                if isinstance(data, Exception) or not data:
+                    continue
+                for ac in data.get("aircraft", []):
+                    for r in ac.get("recentReceiverIds", []):
+                        recv_ingest[r] = ip
+                        pipe.zadd(f"receiver_ac:{r}", {ac["hex"]: int(asyncio.get_event_loop().time())})
 
-                    now = int(asyncio.get_event_loop().time())
-                    for r, ip in recv_ingest.items():
-                        pipe.zremrangebyscore(f"receiver_ac:{r}", "-1", now - 60).expire(f"receiver_ac:{r}", 30).set(f"receiver_ingest:{r}", ip, ex=30)
-                    await pipe.execute()
-            await _locked(self.redis, "feeder_data", 10, _)
-            await asyncio.sleep(5)
+            now = int(asyncio.get_event_loop().time())
+            for r, ip in recv_ingest.items():
+                pipe.zremrangebyscore(f"receiver_ac:{r}", "-1", now - 60).expire(f"receiver_ac:{r}", 30).set(f"receiver_ingest:{r}", ip, ex=30)
+            await pipe.execute()
 
     async def _fetch(self, ip: str) -> dict | None:
         try:
