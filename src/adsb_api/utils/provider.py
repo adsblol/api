@@ -265,10 +265,17 @@ class Provider(Base):
 
     def anonymize_mlat_data(self, data):
         sanitized_data = {}
+
         for name, value in data.items():
+            required_keys = ("lat", "lon", "peers")
+            if not all(key in value for key in required_keys):
+                continue
+
             sanitised_peers = {}
-            for peer, peer_value in value["peers"].items():
-                sanitised_peers[self.maybe_salty_uuid(peer, SALT_MLAT)] = peer_value
+            for peer, peer_value in value.get("peers", {}).items():
+                sanitised_peers[
+                    self.maybe_salty_uuid(peer, SALT_MLAT)
+                ] = peer_value
 
             sanitized_data[self.maybe_salty_uuid(name, SALT_MLAT)] = {
                 "lat": value["lat"],
