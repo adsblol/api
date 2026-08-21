@@ -241,7 +241,7 @@ class Provider(Base):
         for server, data in self.mlat_clients.items():
             # for name, client in self.mlat_clients.items():
             for name, client in data.items():
-                if ip is not None and client["source_ip"] == ip:
+                if ip is not None and client.get("source_ip") == ip:
                     clients_list.append(
                         {key: client[key] for key in keys_to_copy if key in client}
                     )
